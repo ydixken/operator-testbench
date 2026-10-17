@@ -55,6 +55,13 @@ const (
 	// so the Eventually deadline reports first with its own message.
 	NodeTimeoutGrace = 30 * time.Second
 
+	// The step kinds, as the YAML keys spell them.
+	kindApply  = "apply"
+	kindAssert = "assert"
+	kindExec   = "exec"
+	kindDelete = "delete"
+	kindGo     = "go"
+
 	// namespacePrefix starts every scenario namespace.
 	namespacePrefix = "testbench"
 	// maxPackName and maxScenarioName keep "testbench-<pack>-<scenario>-999"
@@ -205,8 +212,8 @@ func (a *AssertStep) Programs() []*Program { return a.programs }
 func (st *Step) Kind() (string, error) {
 	var kinds []string
 	for name, set := range map[string]bool{
-		"apply": st.Apply != nil, "assert": st.Assert != nil, "exec": st.Exec != nil,
-		"delete": st.Delete != nil, "go": st.Go != nil,
+		kindApply: st.Apply != nil, kindAssert: st.Assert != nil, kindExec: st.Exec != nil,
+		kindDelete: st.Delete != nil, kindGo: st.Go != nil,
 	} {
 		if set {
 			kinds = append(kinds, name)
@@ -503,16 +510,16 @@ func (st *Step) validate(known map[string]bool, env *CELEnv) error {
 		return err
 	}
 	switch kind {
-	case "apply":
+	case kindApply:
 		if st.Apply.File == "" || !fs.ValidPath(st.Apply.File) {
 			return fmt.Errorf("apply.file %q must be a relative path inside the pack", st.Apply.File)
 		}
 		return nil
-	case "assert":
+	case kindAssert:
 		return st.Assert.validate(env)
-	case "exec":
+	case kindExec:
 		return st.Exec.validate()
-	case "delete":
+	case kindDelete:
 		return st.Delete.validate()
 	default:
 		return st.Go.validate(known)
