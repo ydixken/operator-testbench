@@ -1,0 +1,16 @@
+# kind cluster for the valkey pack: the shape valkey-operator's own e2e uses,
+# one control-plane and two workers. The node image is digest pinned per the
+# kind v0.33.0 release notes, because kind only supports images built for the
+# kind release that made them: bump the image together with the kind CLI
+# version in CONTRIBUTING.md and e2e-kind.yml, never alone. No zone labels,
+# no taints: no shipped scenario spreads or pins by zone yet.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: testbench
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+  - role: worker
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+  - role: worker
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5

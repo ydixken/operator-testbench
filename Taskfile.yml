@@ -1,0 +1,234 @@
+# Task runner and the human/agent entrypoint. A Taskfile, not a Makefile: there
+# is no generated scaffold to keep pristine, and Task gives the cluster-touching
+# targets their prompts and preconditions.
+version: "3"
+
+set: [pipefail]
+
+tasks:
+  help:
+    desc: List all tasks.
+    aliases: [default]
+    cmds:
+      - task --list-all
+
+  lint:
+    desc: "Lint everything: YAML (packs and scenarios included), workflows, docs links, and Go."
+    cmds:
+      - yamllint --strict .
+      # A link into a directory mkdocs excludes renders dead on the site, and
+      # mkdocs caps that message at INFO, so --strict cannot fail on it.
+      - ./hack/check-docs-links.sh
+      # yamllint proves a workflow is YAML, not that it is a workflow: a step
+      # that lost its `uses:` stays valid YAML. actionlint reads the schema and
+      # the expressions, and runs shellcheck over every run: block.
+      - cmd: |-
+          if command -v actionlint >/dev/null; then
+            actionlint
+          else
+            echo "lint: no actionlint, skipping workflow lint"
+          fi
+      # CI pins golangci-lint through .golangci-lint-version. A different local
+      # version can disagree with CI on a finding, so the mismatch is announced.
+      - cmd: |-
+          want=$(cat .golangci-lint-version)
+          have="v$(golangci-lint version --short 2>/dev/null || true)"
+          [ "$have" = "$want" ] || echo "lint: golangci-lint $have differs from the CI pin $want"
+      - cmd: |-
+          if [ -f go.mod ]; then golangci-lint run; else echo "lint: no go.mod yet, skipping Go lint"; fi
+
+  test:
+    desc: >-
+      Unit tests without a cluster: the engine, the parser, every embedded pack,
+      and the cluster-free tests in test/e2e. -skip keeps TestE2E out even if
+      TESTBENCH_CONTEXT leaked into the shell.
+    cmds:
+      - go test ./... -skip '^TestE2E$' -race -covermode atomic -coverprofile cover.out
+
+  kind:up:
+    desc: >-
+      Create the local kind cluster 'testbench' from hack/kind/<OPERATOR>.yaml
+      (default valkey) if it does not exist, select the context kind-testbench,
+      and preload the pack's workload images into it.
+    vars:
+      PACK: '{{.OPERATOR | default "valkey"}}'
+    preconditions:
+      - sh: test -f hack/kind/{{.PACK}}.yaml
+        msg: "No kind config at hack/kind/{{.PACK}}.yaml"
+    cmds:
+      - cmd: |-
+          if kind get clusters 2>/dev/null | grep -qx testbench; then
+            echo "kind: cluster testbench exists, reusing it"
+          else
+            kind create cluster --config hack/kind/{{.PACK}}.yaml --wait 120s
+          fi
+      - kubectl config use-context kind-testbench
+      - ./hack/kind/preload-images.sh {{.PACK}} testbench
+
+  kind:down:
+    desc: Delete the local kind cluster 'testbench'.
+    cmds:
+      - kind delete cluster --name testbench
+
+  e2e:
+    desc: >-
+      Run the OPERATOR pack's scenarios against the CURRENT kubectl context (a
+      real cluster), one Ginkgo process, after confirming the context. Chaos
+      scenarios are excluded; use e2e:chaos. Vars: FOCUS (Ginkgo focus regex),
+      TIMEOUT (default 1h), VERSION, INSTALL (helm|skip), KEEP, FORCE.
+    vars:
+      KUBE_CONTEXT:
+        sh: kubectl config current-context
+    prompt: >-
+      e2e (pack '{{.OPERATOR}}') will install the operator and create namespaces
+      on kubectl context '{{.KUBE_CONTEXT}}', a real cluster. Continue?
+    preconditions:
+      - &need-operator
+        sh: test -n '{{.OPERATOR}}' && test -f 'operators/{{.OPERATOR}}/operator.yaml'
+        msg: |
+          OPERATOR is required and must name a pack under operators/, for example:
+            task e2e OPERATOR=valkey
+    cmds:
+      - task: e2e:run
+        vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: '!chaos', FOCUS: '{{.FOCUS}}',
+               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+
+  e2e:focus:
+    desc: >-
+      One scenario or step by Ginkgo focus regex against the CURRENT kubectl
+      context, prompted. FOCUS is required. KEEP defaults to true so a rerun
+      finds its namespace; the operator is reinstalled on every run.
+    vars:
+      KUBE_CONTEXT:
+        sh: kubectl config current-context
+    prompt: >-
+      e2e (focus "{{.FOCUS}}", pack '{{.OPERATOR}}') will run against kubectl
+      context '{{.KUBE_CONTEXT}}', a real cluster. Continue?
+    preconditions:
+      - *need-operator
+      - sh: test -n '{{.FOCUS}}'
+        msg: |
+          FOCUS is required, for example:
+            task e2e:focus OPERATOR=valkey FOCUS='cluster-ready'
+    cmds:
+      - task: e2e:run
+        vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: '!chaos', FOCUS: '{{.FOCUS}}',
+               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP | default "true"}}',
+               FORCE: '{{.FORCE}}'}
+
+  e2e:unattended:
+    desc: >-
+      e2e without the confirmation prompt, for an agent or a script that cannot
+      answer one. EXPECT_CONTEXT is required and must name the current kubectl
+      context: the prompt exists to stop a run reaching the wrong cluster, so
+      removing it means saying which cluster you meant. LABELS (default
+      '!chaos') and FOCUS are optional.
+    vars:
+      KUBE_CONTEXT:
+        sh: kubectl config current-context
+    preconditions:
+      - *need-operator
+      - &expect-context
+        sh: test '{{.EXPECT_CONTEXT}}' = '{{.KUBE_CONTEXT}}'
+        msg: |
+          EXPECT_CONTEXT must name the context this will run against.
+            current context: {{.KUBE_CONTEXT}}
+            EXPECT_CONTEXT : {{.EXPECT_CONTEXT | default "(unset)"}}
+    cmds:
+      - task: e2e:run
+        vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: '{{.LABELS | default "!chaos"}}',
+               FOCUS: '{{.FOCUS}}', TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}',
+               KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+
+  e2e:chaos:
+    desc: >-
+      Only the scenarios labelled chaos (they delete pods) against the CURRENT
+      kubectl context, prompted. Same vars as e2e.
+    vars:
+      KUBE_CONTEXT:
+        sh: kubectl config current-context
+    prompt: >-
+      e2e CHAOS (pack '{{.OPERATOR}}', deletes pods inside its own namespaces)
+      will run against kubectl context '{{.KUBE_CONTEXT}}', a real cluster. Continue?
+    preconditions:
+      - *need-operator
+    cmds:
+      - task: e2e:run
+        vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: 'chaos', FOCUS: '{{.FOCUS}}',
+               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+
+  e2e:chaos:unattended:
+    desc: e2e:chaos without the prompt; EXPECT_CONTEXT is required, as for e2e:unattended.
+    vars:
+      KUBE_CONTEXT:
+        sh: kubectl config current-context
+    preconditions:
+      - *need-operator
+      - *expect-context
+    cmds:
+      - task: e2e:run
+        vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: 'chaos', FOCUS: '{{.FOCUS}}',
+               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+
+  e2e:kind:
+    desc: >-
+      kind:up, then the OPERATOR pack against the context kind-testbench with the
+      ginkgo CLI (PROCS default 2, LABELS default '!chaos'), without a prompt.
+    # No prompt: kind:up has just selected kind-testbench itself, so the context
+    # is this task's own creation, not whatever the shell happened to point at.
+    # The EXPECT_CONTEXT precondition still refuses any other current context.
+    # task --yes stays forbidden everywhere.
+    preconditions:
+      - *need-operator
+    cmds:
+      - task: kind:up
+        vars: {OPERATOR: '{{.OPERATOR}}'}
+      - task: e2e:run:parallel
+        vars: {OPERATOR: '{{.OPERATOR}}', EXPECT_CONTEXT: kind-testbench, LABELS: '{{.LABELS | default "!chaos"}}',
+               PROCS: '{{.PROCS | default "2"}}', FOCUS: '{{.FOCUS}}', TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}',
+               INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+
+  e2e:run:
+    internal: true
+    requires: {vars: [KUBE_CONTEXT, OPERATOR, LABELS]}
+    vars:
+      T: '{{.TIMEOUT | default "1h"}}'
+    env:
+      TESTBENCH_OPERATOR: '{{.OPERATOR}}'
+      TESTBENCH_OPERATOR_VERSION: '{{.VERSION}}'
+      TESTBENCH_OPERATOR_INSTALL: '{{.INSTALL | default "helm"}}'
+      TESTBENCH_KEEP: '{{.KEEP | default "false"}}'
+      TESTBENCH_FORCE: '{{.FORCE | default "false"}}'
+    cmds:
+      # TESTBENCH_CONTEXT binds the confirmed context; set inline because an
+      # exported value beats a Taskfile env: block. -ginkgo.timeout must match
+      # -timeout: Ginkgo's own suite timeout defaults to 1h.
+      - >-
+        TESTBENCH_CONTEXT='{{.KUBE_CONTEXT}}' go test ./test/e2e -run '^TestE2E$' -v
+        -timeout '{{.T}}' -ginkgo.v -ginkgo.timeout='{{.T}}' -ginkgo.fail-on-empty
+        -ginkgo.label-filter='{{.LABELS}}'{{if .FOCUS}} -ginkgo.focus='{{.FOCUS}}'{{end}}
+
+  e2e:run:parallel:
+    internal: true
+    requires: {vars: [EXPECT_CONTEXT, OPERATOR, LABELS, PROCS]}
+    vars:
+      KUBE_CONTEXT:
+        sh: kubectl config current-context
+      T: '{{.TIMEOUT | default "1h"}}'
+    preconditions:
+      - *expect-context
+    env:
+      TESTBENCH_OPERATOR: '{{.OPERATOR}}'
+      TESTBENCH_OPERATOR_VERSION: '{{.VERSION}}'
+      TESTBENCH_OPERATOR_INSTALL: '{{.INSTALL | default "helm"}}'
+      TESTBENCH_KEEP: '{{.KEEP | default "false"}}'
+      TESTBENCH_FORCE: '{{.FORCE | default "false"}}'
+    cmds:
+      # go test cannot run Ginkgo in parallel, so go run builds the CLI at the
+      # version go.mod pins. Reports land in reports/ (gitignored).
+      - >-
+        TESTBENCH_CONTEXT='{{.KUBE_CONTEXT}}' go run github.com/onsi/ginkgo/v2/ginkgo --procs={{.PROCS}} -v
+        --timeout='{{.T}}' --poll-progress-after=5m --fail-on-empty
+        --label-filter='{{.LABELS}}'{{if .FOCUS}} --focus='{{.FOCUS}}'{{end}}
+        --json-report=report.json --junit-report=junit.xml --output-dir=reports
+        ./test/e2e -- -test.run='^TestE2E$'

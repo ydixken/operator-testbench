@@ -1,0 +1,106 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "One grouped PR per week for everything non-major; majors arrive on their own and wait for a human.",
+    "The operator under test and the kind node image are treated like majors regardless of their SemVer type:",
+    "valkey-operator broke its v1alpha1 API in most 0.x minors, so a bump must be read against the scenarios,",
+    "and a kindest/node image only works with the kind release that built it, so it moves with the kind CLI pin.",
+    "GitHub Actions pins float on major tags on purpose, so no digest pinning: config:recommended leaves pinDigests off."
+  ],
+  "extends": [
+    "config:recommended",
+    "schedule:weekly",
+    "group:allNonMajor",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "timezone": "Europe/Berlin",
+  "platformAutomerge": true,
+  "packageRules": [
+    {
+      "description": "Low-risk updates land on their own once CI is green.",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin"],
+      "automerge": true
+    },
+    {
+      "description": "Majors need a human to read the changelog, so label them and leave them.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["dependencies/major"]
+    },
+    {
+      "description": "The operator under test: every bump is read against the scenarios before it merges.",
+      "matchDepNames": ["valkey-io/valkey-operator", "valkey-operator"],
+      "automerge": false,
+      "addLabels": ["dependencies/major"]
+    },
+    {
+      "description": "A kindest/node image is built for one kind release; bump kind and the node image together.",
+      "matchDepNames": ["kindest/node", "kubernetes-sigs/kind"],
+      "automerge": false,
+      "addLabels": ["dependencies/major"]
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Operator packs annotate every pinned version the same way, so one manager serves every pack.",
+      "customType": "regex",
+      "managerFilePatterns": ["operators/*/operator.yaml"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?\\s+version: \"?(?<currentValue>[^\"\\s]+)\"?"
+      ]
+    },
+    {
+      "description": "kind node images are digest pinned per kind's release notes.",
+      "customType": "regex",
+      "managerFilePatterns": ["hack/kind/*.yaml"],
+      "matchStrings": [
+        "image: (?<depName>kindest/node):(?<currentValue>v\\d+\\.\\d+\\.\\d+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "kind-action installs the kind version named here; the local kind comes from the package manager.",
+      "customType": "regex",
+      "managerFilePatterns": [".github/workflows/*.yml"],
+      "matchStrings": [
+        "uses: helm/kind-action@v\\d+\\s+with:\\s+version: (?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "kubernetes-sigs/kind",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "mkdocs-material is pinned in ci.yml and docs.yml and both must agree.",
+      "customType": "regex",
+      "managerFilePatterns": [".github/workflows/ci.yml", ".github/workflows/docs.yml"],
+      "matchStrings": ["mkdocs-material==(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "mkdocs-material",
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "description": "golangci-lint pin, read by the CI action and by task lint.",
+      "customType": "regex",
+      "managerFilePatterns": [".golangci-lint-version"],
+      "matchStrings": ["^(?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s*$"],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "yamllint is installed at this pin in ci.yml.",
+      "customType": "regex",
+      "managerFilePatterns": [".github/workflows/ci.yml"],
+      "matchStrings": ["yamllint==(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "yamllint",
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "description": "actionlint is installed at this pin in ci.yml.",
+      "customType": "regex",
+      "managerFilePatterns": [".github/workflows/ci.yml"],
+      "matchStrings": ["github\\.com/rhysd/actionlint/cmd/actionlint@(?<currentValue>v\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "github.com/rhysd/actionlint",
+      "datasourceTemplate": "go"
+    }
+  ]
+}
