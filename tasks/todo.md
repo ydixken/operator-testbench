@@ -11,22 +11,23 @@ Design: the brainstorming spec in `docs/superpowers/specs/2026-10-18-operator-te
 - [x] `docs: mkdocs site skeleton`.
 - [x] `ci: lint, test, docs and release workflows plus the context gate`.
 - [x] Private-facts grep returns nothing before the first push.
-- [ ] GitHub repository created and configured; CI green on main; branch protection with lint, test, docs.
+- [x] GitHub repository created and configured; CI green on main; branch protection with lint, test, docs.
+  Recreated once on 2026-10-18 to purge co-author trailers from a closed pull request's history.
 
 ## Engine (one PR each)
 
-- [ ] `feat(testbench): CEL environment`.
-- [ ] `feat(testbench): scenario and pack schema with strict validation`.
-- [ ] `feat(testbench): pack loader and environment knobs`.
-- [ ] `feat(testbench): subset matching, report formatting and redaction`.
-- [ ] `feat(testbench): run with apply, assert, delete and go steps`.
-- [ ] `feat(testbench): exec step over kubectl`.
-- [ ] `feat(testbench): helm and kubectl operator install`.
-- [ ] `feat(testbench): failure diagnostics`.
+- [x] `feat(testbench): CEL environment`.
+- [x] `feat(testbench): scenario and pack schema with strict validation`.
+- [x] `feat(testbench): pack loader and environment knobs`.
+- [x] `feat(testbench): subset matching, report formatting and redaction`.
+- [x] `feat(testbench): run with apply, assert, delete and go steps`.
+- [x] `feat(testbench): exec step over kubectl`.
+- [x] `feat(testbench): helm and kubectl operator install`.
+- [x] `feat(testbench): failure diagnostics`.
 
 ## Valkey pack and the suite
 
-- [ ] `feat(valkey): operator pack, cluster-ready scenario and the Ginkgo suite`; `task e2e:kind OPERATOR=valkey` green locally.
+- [x] `feat(valkey): operator pack, cluster-ready scenario and the Ginkgo suite`; `task e2e:kind OPERATOR=valkey` green locally (19 of 19 specs, 67 s, 2026-10-18).
 - [ ] `ci: run the valkey pack on kind for every pull request`; protection extended with e2e-kind.
 - [ ] `feat(valkey): data-path, scale-replicas, scale-shards and persistence-restart scenarios`.
 - [ ] `feat(valkey): shard role Go step and the failover chaos scenario`; `task e2e:kind OPERATOR=valkey LABELS=chaos` green locally.
