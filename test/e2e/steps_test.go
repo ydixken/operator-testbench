@@ -30,7 +30,9 @@ import (
 // `go: {name: ...}`. One explicit map, no init() registration: the loader
 // validates against exactly these keys, and TestEmbeddedPacksParse requires
 // every key to be used by some scenario, so nothing here is dead.
-var goSteps = map[string]testbench.GoStepFunc{}
+var goSteps = map[string]testbench.GoStepFunc{
+	"valkey.shardRoles": valkeyShardRoles,
+}
 
 func goStepNames() map[string]bool {
 	known := make(map[string]bool, len(goSteps))
