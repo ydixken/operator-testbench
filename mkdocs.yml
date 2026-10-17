@@ -1,0 +1,49 @@
+# Docs site configuration (Material for MkDocs). Built and deployed by
+# .github/workflows/docs.yml; build it locally with `mkdocs build --strict`.
+# Cross-page links are page-relative .md paths so the same files render on
+# GitHub and on the site.
+site_name: operator-testbench
+repo_url: https://github.com/ydixken/operator-testbench
+docs_dir: docs
+
+# research/ holds drafts and superpowers/ local-only design notes; neither is
+# user documentation. hack/check-docs-links.sh reads this list.
+exclude_docs: |
+  research/
+  superpowers/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - toc.follow
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Concepts: concepts.md
+  - Writing scenarios: scenarios.md
+  - Operator packs: packs.md
+  - Operators:
+      - Valkey: operators/valkey.md
+  - Environments: environments.md
+  - Reference:
+      - Scenario schema: reference/scenario-schema.md
+      - Pack schema: reference/pack-schema.md
+      - Environment variables: reference/environment.md
+      - Task targets: reference/tasks.md
+  - Troubleshooting: troubleshooting.md
+  - Contributing: contributing.md
