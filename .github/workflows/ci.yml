@@ -1,0 +1,98 @@
+name: CI
+
+# Lint, test and build the docs on every push and pull request. These three
+# jobs plus e2e-kind.yml's job are the required checks on main. Every job runs
+# on a hosted runner, so a fork's pull request runs the same steps with a
+# read-only token and no secrets.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate
+          fail-on-scopes: runtime, development, unknown
+          allow-licenses: >-
+            Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT,
+            LicenseRef-scancode-google-patent-license-golang, LicenseRef-bad-apache-2.0-bsd-3-clause
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: yamllint
+        run: |
+          pipx install yamllint==1.38.0
+          yamllint --strict .
+      - name: actionlint
+        # yamllint alone cannot detect a step that lost its `uses:`.
+        run: |
+          GOBIN="$HOME/.local/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$HOME/.local/bin/actionlint"
+      - name: Docs links
+        run: ./hack/check-docs-links.sh
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version-file: .golangci-lint-version
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Unit tests, every embedded pack, and the cluster-free tests in test/e2e
+        # -skip keeps the cluster entry point out; TestE2E runs only from the
+        # kind workflows and the e2e Task targets, which name the context.
+        run: go test ./... -skip '^TestE2E$' -count=1 -race -v -covermode atomic -coverprofile cover.out
+      - name: Coverage total
+        run: go tool cover -func=cover.out | tail -n 1 >> "$GITHUB_STEP_SUMMARY"
+      # Codecov requires a token even for a public repo: a tokenless upload is
+      # rejected. Skipped outright when no CODECOV_TOKEN secret is set, so the
+      # absence is visible as a skipped step rather than a green job that
+      # uploaded nothing; when the secret is set, a failed upload fails the job.
+      - name: Upload coverage
+        if: env.CODECOV_TOKEN != ''
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./cover.out
+          fail_ci_if_error: true
+
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: mkdocs build --strict
+        # Pinned to match the docs deploy workflow; a Renovate custom manager
+        # bumps both together. --strict turns warnings into errors.
+        run: |
+          pip install mkdocs-material==9.7.7
+          mkdocs build --strict
+      - name: Simplified Technical English pages
+        # The reference pages are written to ASD-STE100 (AGENTS.md); the
+        # vendored linter fails on a hard violation.
+        run: |
+          for f in docs/reference/scenario-schema.md docs/reference/pack-schema.md docs/reference/environment.md; do
+            python3 .claude/skills/asd-ste100/scripts/ste-lint.py "$f"
+          done

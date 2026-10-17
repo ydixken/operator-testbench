@@ -6,11 +6,11 @@ Design: the brainstorming spec in `docs/superpowers/specs/2026-10-18-operator-te
 
 - [x] Toolchain: go 1.27.2, kind 0.33.0, golangci-lint 2.15.0, yamllint 1.38.0, actionlint 1.7.12 installed and verified.
 - [x] `chore: scaffold the repository`: LICENSE, .gitignore, AUTHORS.md, README.md, CLAUDE.md, AGENTS.md, CONTRIBUTING.md, tasks/.
-- [ ] `chore: add the Taskfile, lint configuration and kind helpers`.
-- [ ] `chore: vendor the agent skills`.
-- [ ] `docs: mkdocs site skeleton`.
-- [ ] `ci: lint, test, docs and release workflows plus the context gate`.
-- [ ] Private-facts grep returns nothing before the first push.
+- [x] `chore: add the Taskfile, lint configuration and kind helpers`.
+- [x] `chore: vendor the agent skills`.
+- [x] `docs: mkdocs site skeleton`.
+- [x] `ci: lint, test, docs and release workflows plus the context gate`.
+- [x] Private-facts grep returns nothing before the first push.
 - [ ] GitHub repository created and configured; CI green on main; branch protection with lint, test, docs.
 
 ## Engine (one PR each)
