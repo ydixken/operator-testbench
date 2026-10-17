@@ -30,7 +30,7 @@ Design: the brainstorming spec in `docs/superpowers/specs/2026-10-18-operator-te
 - [x] `feat(valkey): operator pack, cluster-ready scenario and the Ginkgo suite`; `task e2e:kind OPERATOR=valkey` green locally (19 of 19 specs, 67 s, 2026-10-18).
 - [ ] `ci: run the valkey pack on kind for every pull request`; protection extended with e2e-kind.
 - [x] `feat(valkey): data-path, scale-replicas, scale-shards and persistence-restart scenarios`; 67 of 67 specs green locally in 3 min 52 s (2026-10-18).
-- [ ] `feat(valkey): shard role Go step and the failover chaos scenario`; `task e2e:kind OPERATOR=valkey LABELS=chaos` green locally.
+- [x] `feat(valkey): shard role Go step and the failover chaos scenario`; `task e2e:kind OPERATOR=valkey LABELS=chaos` green locally (10 of 10 specs, 79 s, 2026-10-18).
 - [ ] `ci: nightly chaos run on kind that opens an issue on failure`; one dispatched run proves it.
 - [x] `docs: concepts, scenarios, packs, environments, reference and troubleshooting`; STE pages lint clean.
 
