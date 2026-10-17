@@ -42,9 +42,10 @@ linters:
   exclusions:
     generated: lax
     rules:
-      # Table tests and Ginkgo spec strings are long and repetitive by nature.
+      # Table tests and fixtures repeat literals and long lines by nature.
       - linters:
           - dupl
+          - goconst
           - lll
         path: _test\.go
     paths:
