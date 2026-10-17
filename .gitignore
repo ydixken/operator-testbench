@@ -1,0 +1,40 @@
+# Go
+bin/
+*.test
+*.out
+go.work
+go.work.sum
+
+# Ginkgo reports written by task e2e:kind and the kind workflows.
+reports/
+
+# Editors
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# macOS host
+.DS_Store
+
+# Local cluster credentials are secrets and MUST never be committed.
+kubeconfig/
+*.kubeconfig
+
+# Local secrets
+.env
+
+# Per-user agent settings (the vendored .claude/skills/ stays tracked)
+.claude/settings.local.json
+
+# Agent worktrees are transient workspaces, never repo content.
+.claude/worktrees/
+.worktrees/
+
+# mkdocs build output (mkdocs.yml), served by GitHub Pages, never committed.
+site/
+
+# Local-only design notes, kept out of the public repo.
+docs/superpowers/
+tasks/work-packages/
