@@ -1,0 +1,23 @@
+# Persistence-restart second cluster: upstream's persistent-delete sample at
+# v0.7.1 (1x1, 1Gi, reclaimPolicy Delete) plus the pack's image pins and resources.
+apiVersion: valkey.io/v1alpha1
+kind: ValkeyCluster
+metadata:
+  name: persist-rpd
+spec:
+  shards: 1
+  replicas: 1
+  persistence:
+    size: 1Gi
+    reclaimPolicy: Delete
+  config:
+    appendonly: 'yes'
+  image: valkey/valkey:9.0.0
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  exporter:
+    image: oliver006/redis_exporter:v1.88.0
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}

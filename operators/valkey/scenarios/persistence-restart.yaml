@@ -1,0 +1,147 @@
+# A persistent 3x1 cluster with appendonly survives every pod being deleted at
+# once (all pod IPs change and the operator heals stale addresses), its PVCs
+# are retained when the CR goes (reclaimPolicy Retain, the default), and a
+# second cluster with reclaimPolicy Delete loses its PVCs with the CR. Port of
+# upstream's restart and persistence tests at v0.7.1 without the event
+# counting. The delete step waits until every deleted UID is gone, so the
+# recovery asserts cannot pass on pods that were never replaced. Needs a
+# default StorageClass with a dynamic RWO provisioner (kind's standard one).
+apiVersion: testbench.dev/v1alpha1
+kind: Scenario
+labels: [persistence]
+priority: 3
+steps:
+  - name: apply a persistent 3x1 cluster with appendonly
+    timeout: 1m
+    apply: {file: manifests/persistent-3x1.yaml}
+
+  - name: the cluster reports Ready for the applied generation
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: persist}
+      match:
+        status: {state: Ready, shards: 3, readyShards: 3}
+      cel: &ready
+        - >-
+          self.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True'
+          && c.reason == 'ClusterHealthy' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'Progressing' && c.status == 'False'
+          && c.reason == 'ReconcileComplete' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'ClusterFormed' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'SlotsAssigned' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - self.status.conditions.filter(c, c.type == 'Degraded' && c.status == 'True').size() == 0
+
+  - name: valkey.conf points data and nodes.conf at the volume
+    timeout: 1m
+    assert:
+      object: {apiVersion: v1, kind: ConfigMap, name: valkey-persist}
+      cel:
+        - self.data['valkey.conf'].contains('dir /data')
+        - self.data['valkey.conf'].contains('cluster-config-file /data/nodes.conf')
+
+  - name: six 1Gi PVCs are Bound
+    timeout: 3m
+    assert:
+      list: {apiVersion: v1, kind: PersistentVolumeClaim, selector: valkey.io/cluster=persist}
+      count: 6
+      cel:
+        - items.all(p, p.status.phase == 'Bound' && p.spec.resources.requests.storage == '1Gi')
+
+  - name: every ValkeyNode reports its PVC ready
+    timeout: 3m
+    assert:
+      list: {apiVersion: valkey.io/v1alpha1, kind: ValkeyNode, selector: valkey.io/cluster=persist}
+      count: 6
+      cel:
+        - items.all(n, n.status.conditions.exists(c, c.type == 'PersistentVolumeClaimReady' && c.status == 'True'))
+
+  - name: write a canary key
+    timeout: 2m
+    exec:
+      pod: valkey-persist-0-0-0
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli -c set tb:restart-canary survives-full-restart']
+      expect: {contains: ['OK']}
+
+  - name: delete every pod at once so every pod IP changes
+    timeout: 3m
+    delete:
+      list: {apiVersion: v1, kind: Pod, selector: valkey.io/cluster=persist}
+
+  - name: the cluster returns to Ready without intervention
+    timeout: 5m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: persist}
+      match:
+        status: {state: Ready, shards: 3, readyShards: 3}
+      cel: *ready
+
+  - name: cluster_state is ok and the canary survived on disk
+    timeout: 2m
+    exec:
+      pod: valkey-persist-0-0-0
+      container: server
+      command:
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          valkey-cli cluster info | head -1;
+          valkey-cli -c get tb:restart-canary
+      expect:
+        contains: ['cluster_state:ok', 'survives-full-restart']
+
+  - name: delete the cluster
+    timeout: 3m
+    delete:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: persist}
+
+  - name: its ValkeyNodes are gone
+    timeout: 2m
+    assert:
+      list: {apiVersion: valkey.io/v1alpha1, kind: ValkeyNode, selector: valkey.io/cluster=persist}
+      count: 0
+
+  - name: the six PVCs are retained and still Bound
+    timeout: 1m
+    assert:
+      list: {apiVersion: v1, kind: PersistentVolumeClaim, selector: valkey.io/cluster=persist}
+      count: 6
+      cel:
+        - items.all(p, p.status.phase == 'Bound')
+
+  - name: apply a 1x1 cluster with reclaimPolicy Delete
+    timeout: 1m
+    apply: {file: manifests/persistent-delete-1x1.yaml}
+
+  - name: the Delete-policy cluster is Ready
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: persist-rpd}
+      match:
+        status: {state: Ready, shards: 1, readyShards: 1}
+      cel: *ready
+
+  - name: its two PVCs are Bound
+    timeout: 3m
+    assert:
+      list: {apiVersion: v1, kind: PersistentVolumeClaim, selector: valkey.io/cluster=persist-rpd}
+      count: 2
+      cel:
+        - items.all(p, p.status.phase == 'Bound')
+
+  - name: delete the Delete-policy cluster
+    timeout: 3m
+    delete:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: persist-rpd}
+
+  - name: its PVCs are removed with it
+    timeout: 2m
+    assert:
+      list: {apiVersion: v1, kind: PersistentVolumeClaim, selector: valkey.io/cluster=persist-rpd}
+      count: 0
