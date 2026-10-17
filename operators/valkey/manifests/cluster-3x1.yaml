@@ -1,0 +1,25 @@
+# Upstream's config/samples/v1alpha1_valkeycluster.yaml at v0.7.1 with the
+# requests shrunk so two Ginkgo processes fit a 4 vCPU runner, the images
+# pinned to the operator's own defaults (the operator parses the Valkey version
+# from the tag for version-gated config, so never :latest or a digest), and
+# explicit exporter resources (the operator sets none). No namespace: the
+# engine fills in the scenario's own.
+apiVersion: valkey.io/v1alpha1
+kind: ValkeyCluster
+metadata:
+  name: demo
+spec:
+  shards: 3
+  replicas: 1
+  image: valkey/valkey:9.0.0
+  config:
+    maxmemory: 50mb
+    maxmemory-policy: allkeys-lfu
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  exporter:
+    image: oliver006/redis_exporter:v1.88.0
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}

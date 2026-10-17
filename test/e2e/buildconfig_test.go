@@ -189,3 +189,36 @@ func TestNoWorkflowUsesPullRequestTarget(t *testing.T) {
 		}
 	}
 }
+
+const e2eSuite = "e2e_suite_test.go"
+
+// The suite reads the current context to compare it with TESTBENCH_CONTEXT;
+// the gate's own test keeps it out of error messages, and this keeps it out
+// of a banner, because CI logs are public.
+func TestE2ESuiteDoesNotPrintTheRawKubeContext(t *testing.T) {
+	for _, phrase := range []string{"running against kubectl context", "suite.Env.Context)"} {
+		if strings.Contains(read(t, e2eSuite), "GinkgoWriter, "+phrase) || strings.Contains(read(t, e2eSuite), "By(\"context ") {
+			t.Errorf("e2e suite prints the kube context (%q), and CI logs are public", phrase)
+		}
+	}
+}
+
+// TestE2EContextGate covers the decision, not the call, so a refactor could
+// drop the gate from TestE2E with every unit test green.
+func TestE2ECallsTheContextGateBeforeRunSpecs(t *testing.T) {
+	const head = "func TestE2E(t *testing.T) {"
+	src := read(t, e2eSuite)
+	start := strings.Index(src, head)
+	if start < 0 {
+		t.Fatalf("%s has no %q", e2eSuite, head)
+	}
+	body, _, _ := strings.Cut(src[start:], "\n}\n")
+	gate := strings.Index(body, "e2eContextGate(os.Getenv(contextEnv), kubeCurrentContext)")
+	run := strings.Index(body, "RunSpecs(")
+	if gate < 0 || run < 0 || gate > run {
+		t.Error("TestE2E must call e2eContextGate before RunSpecs, or a plain go test reaches the current context")
+	}
+	if !strings.Contains(body, "suiteConfig.FailOnEmpty = true") {
+		t.Error("TestE2E must set FailOnEmpty, or a mistyped label filter passes a run of nothing")
+	}
+}

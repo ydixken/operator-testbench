@@ -1,0 +1,36 @@
+# Pack for valkey-io/valkey-operator. Every version here is pinned on purpose:
+# the v1alpha1 API changed in nearly every 0.x minor (v0.3 shards required,
+# v0.4 scheduling and podDisruptionBudget, v0.5 networking.tls, v0.6
+# tls.certificates, v0.7 StatefulSet serviceName), so this catalog is only
+# valid against the operator version it names. Bump operator.version, the
+# chart version and, if the API moved, the scenarios in one pull request.
+# TESTBENCH_OPERATOR_VERSION is a patch-level override.
+apiVersion: testbench.dev/v1alpha1
+kind: OperatorPack
+operator:
+  # renovate: datasource=github-releases depName=valkey-io/valkey-operator
+  version: v0.7.1
+  # The engine creates this namespace and installs into it; a production
+  # install in the chart's default valkey-operator-system is never touched.
+  namespace: testbench-valkey-system
+  # The chart labels its controller pods with both; the readiness wait and
+  # the failure log tail select them with this.
+  selector: app.kubernetes.io/name=valkey-operator,control-plane=controller-manager
+install:
+  # Helm never upgrades CRDs. The chart's UPGRADE.md applies them server-side
+  # from the operator repository at the matching tag before the chart; so does
+  # the engine, before helm install --skip-crds.
+  crds:
+    - https://raw.githubusercontent.com/valkey-io/valkey-operator/{{ .Version }}/config/crd/bases/valkey.io_valkeyclusters.yaml
+    - https://raw.githubusercontent.com/valkey-io/valkey-operator/{{ .Version }}/config/crd/bases/valkey.io_valkeynodes.yaml
+  helm:
+    # The chart lives in valkey-io/valkey-helm and is served from its Pages site.
+    repo: https://valkey.io/valkey-helm
+    chart: valkey-operator
+    # renovate: datasource=helm depName=valkey-operator registryUrl=https://valkey.io/valkey-helm
+    version: 0.7.0
+    # The chart's fullname helper returns the release name unchanged when it
+    # contains the chart name, so the Deployment is testbench-valkey-operator.
+    release: testbench-valkey-operator
+    set:
+      image.tag: "{{ .Version }}"
