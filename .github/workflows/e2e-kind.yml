@@ -1,0 +1,67 @@
+name: E2E kind
+
+# Runs the operator pack's scenarios on an ephemeral kind cluster for every
+# push to main and every pull request. The cluster lives and dies inside the
+# runner, so a fork's pull request runs the same suite with a read-only token
+# and no secrets. The job id e2e-kind is a required check on main: no paths:
+# filter here, because a required check that never reports blocks every merge.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Every run owns its own cluster, so a superseded push can be cancelled.
+  group: e2e-kind-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-kind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v5
+        with:
+          # The major the engine's helm flags are exercised with locally.
+          version: v4.3.1
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.33.0
+          cluster_name: testbench
+          config: hack/kind/valkey.yaml
+          kubectl_version: v1.37.1
+          wait: 120s
+      - name: Preload the pack's images
+        # One pull per image on the runner instead of one per node from Docker Hub.
+        run: ./hack/kind/preload-images.sh valkey testbench
+      - name: Run the valkey pack
+        # The ginkgo CLI at the go.mod version, because go test cannot run
+        # Ginkgo in parallel. --fail-on-empty turns a run of nothing red.
+        env:
+          TESTBENCH_CONTEXT: kind-testbench
+          TESTBENCH_OPERATOR: valkey
+          TESTBENCH_PROCS: "2"
+        run: |
+          : "${TESTBENCH_CONTEXT:?must name the kind context, or TestE2E skips and the gate goes green with zero specs}"
+          go run github.com/onsi/ginkgo/v2/ginkgo --procs="$TESTBENCH_PROCS" -v --github-output \
+            --timeout=50m --poll-progress-after=5m --fail-on-empty --label-filter='!chaos' \
+            --json-report=report.json --junit-report=junit.xml --output-dir=reports \
+            ./test/e2e -- -test.run='^TestE2E$'
+      - name: Export kind logs
+        if: failure()
+        run: kind export logs reports/kind-logs --name testbench
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-kind-reports
+          path: reports
+          retention-days: 14
+          if-no-files-found: ignore
