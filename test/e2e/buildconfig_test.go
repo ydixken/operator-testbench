@@ -33,9 +33,10 @@ import (
 )
 
 const (
-	taskfile    = "../../Taskfile.yml"
-	ciWorkflow  = "../../.github/workflows/ci.yml"
-	workflowDir = "../../.github/workflows"
+	taskfile        = "../../Taskfile.yml"
+	ciWorkflow      = "../../.github/workflows/ci.yml"
+	e2eKindWorkflow = "../../.github/workflows/e2e-kind.yml"
+	workflowDir     = "../../.github/workflows"
 )
 
 func read(t *testing.T, path string) string {
@@ -48,9 +49,10 @@ func read(t *testing.T, path string) string {
 }
 
 type workflowStep struct {
-	Name string `json:"name"`
-	Uses string `json:"uses"`
-	Run  string `json:"run"`
+	Name string            `json:"name"`
+	Uses string            `json:"uses"`
+	Run  string            `json:"run"`
+	Env  map[string]string `json:"env"`
 }
 
 type workflowJob struct {
@@ -173,6 +175,42 @@ func TestRequiredCheckJobsKeepTheirIDs(t *testing.T) {
 		if job.RunsOn != "ubuntu-latest" {
 			t.Errorf("ci.yml job %s runs on %q, want ubuntu-latest: no self-hosted runners in a public repo", id, job.RunsOn)
 		}
+	}
+}
+
+// TestE2E skips without TESTBENCH_CONTEXT, and a skipped suite exits 0, so the
+// kind workflow would pass the merge gate without running a spec. The run step
+// therefore refuses an empty context, fails on an empty spec set, and keeps
+// the package's cluster-free tests out of every process.
+func TestKindWorkflowNamesItsContext(t *testing.T) {
+	wf := mustParse(t, e2eKindWorkflow)
+	job, ok := wf.Jobs["e2e-kind"]
+	if !ok {
+		t.Fatal("e2e-kind.yml has no e2e-kind job; branch protection requires that check")
+	}
+	if job.Name != "" || job.RunsOn != "ubuntu-latest" {
+		t.Errorf("e2e-kind job must keep its id as the check name and run on ubuntu-latest, got name %q on %q", job.Name, job.RunsOn)
+	}
+	runs := 0
+	for _, step := range job.Steps {
+		if !strings.Contains(step.Run, "ginkgo/v2/ginkgo") {
+			continue
+		}
+		runs++
+		if step.Env["TESTBENCH_CONTEXT"] != "kind-testbench" {
+			t.Errorf("run step sets TESTBENCH_CONTEXT=%q, want kind-testbench", step.Env["TESTBENCH_CONTEXT"])
+		}
+		for _, want := range []string{`: "${TESTBENCH_CONTEXT:?`, "--fail-on-empty", "-- -test.run='^TestE2E$'", "--label-filter='!chaos'"} {
+			if !strings.Contains(step.Run, want) {
+				t.Errorf("run step lacks %q:\n%s", want, step.Run)
+			}
+		}
+	}
+	if runs != 1 {
+		t.Errorf("e2e-kind job has %d ginkgo steps, want 1", runs)
+	}
+	if !strings.Contains(read(t, e2eKindWorkflow), "pull_request:") {
+		t.Error("e2e-kind.yml must run on pull_request; it is the merge gate's cluster coverage")
 	}
 }
 
