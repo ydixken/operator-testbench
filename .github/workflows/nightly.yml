@@ -1,0 +1,91 @@
+name: Nightly
+
+# The chaos scenarios (pod kills) on an ephemeral kind cluster, every night and
+# on demand. They are excluded from the pull request gate because a failover's
+# timing is the operator's and Valkey's, not the change under review. A failure
+# opens an issue, or comments on the one already open, so a red night is never
+# silent.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chaos:
+    # A fork has no reason to run this on a schedule.
+    if: github.repository == 'ydixken/operator-testbench'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.33.0
+          cluster_name: testbench
+          config: hack/kind/valkey.yaml
+          kubectl_version: v1.37.1
+          wait: 120s
+      - name: Preload the pack's images
+        run: ./hack/kind/preload-images.sh valkey testbench
+      - name: Run the chaos scenarios of the valkey pack
+        env:
+          TESTBENCH_CONTEXT: kind-testbench
+          TESTBENCH_OPERATOR: valkey
+          TESTBENCH_PROCS: "2"
+        run: |
+          : "${TESTBENCH_CONTEXT:?must name the kind context, or TestE2E skips and the run goes green with zero specs}"
+          go run github.com/onsi/ginkgo/v2/ginkgo --procs="$TESTBENCH_PROCS" -v --github-output \
+            --timeout=80m --poll-progress-after=5m --fail-on-empty --label-filter='chaos' \
+            --json-report=report.json --junit-report=junit.xml --output-dir=reports \
+            ./test/e2e -- -test.run='^TestE2E$'
+      - name: Export kind logs
+        if: failure()
+        run: kind export logs reports/kind-logs --name testbench
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nightly-chaos-reports
+          path: reports
+          retention-days: 14
+          if-no-files-found: ignore
+
+  failed:
+    needs: [chaos]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write  # the workflow default is read-only
+    steps:
+      - name: Open or update the nightly failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # There is no checkout here, so gh cannot infer the repository.
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="The nightly chaos run failed. Run: $RUN_URL"
+          # GitHub has accepted the TCP connection and then never answered, so
+          # each attempt is bounded and retried rather than waited on.
+          for attempt in 1 2 3; do
+            if existing=$(timeout 60 gh issue list --label nightly-failure --state open --json number --jq '.[0].number'); then
+              if [ -n "$existing" ]; then
+                timeout 60 gh issue comment "$existing" --body "$body" && exit 0
+              else
+                timeout 60 gh issue create --title "nightly chaos e2e failed" --label nightly-failure --body "$body" && exit 0
+              fi
+            fi
+            echo "::warning::attempt $attempt to report the failure did not go through"
+            sleep 5
+          done
+          exit 1

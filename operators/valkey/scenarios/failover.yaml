@@ -1,0 +1,111 @@
+# Chaos: kill the live primary of shard 0 and watch the replica take over, the
+# operator rebuild the shard and no acknowledged write disappear. The live
+# primary comes from INFO replication through the valkey.shardRoles Go step,
+# not from labels or status: node-index labels never move after a failover and
+# ValkeyNode status.role can lag. Nightly only (label chaos): Valkey 9.0's
+# shutdown-on-sigterm handoff is best-effort and the crash path waits out
+# cluster-node-timeout (15s by default).
+apiVersion: testbench.dev/v1alpha1
+kind: Scenario
+labels: [chaos]
+priority: 2
+steps:
+  - name: apply a 3x1 cluster
+    timeout: 1m
+    apply: {file: manifests/cluster-3x1.yaml}
+
+  - name: the cluster reports Ready for the applied generation
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: demo}
+      match:
+        status: {state: Ready, shards: 3, readyShards: 3}
+      cel: &ready
+        - >-
+          self.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True'
+          && c.reason == 'ClusterHealthy' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'Progressing' && c.status == 'False'
+          && c.reason == 'ReconcileComplete' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'ClusterFormed' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'SlotsAssigned' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - self.status.conditions.filter(c, c.type == 'Degraded' && c.status == 'True').size() == 0
+
+  - name: find the live primary and the in-sync replica of shard 0
+    timeout: 3m
+    go:
+      name: valkey.shardRoles
+      args: {cluster: demo, shard: '0'}
+
+  - name: write 50 keys across the keyspace through the primary
+    timeout: 2m
+    exec:
+      pod: '{{ .Vars.primary }}'
+      container: server
+      command:
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          n=$(for i in $(seq 1 50); do echo "set tb:failover:$i v$i"; done | valkey-cli -c | grep -c '^OK$');
+          echo written=$n
+      expect: {contains: ['written=50']}
+
+  - name: delete the primary's pod with the default grace period
+    timeout: 2m
+    delete:
+      object: {apiVersion: v1, kind: Pod, name: '{{ .Vars.primary }}'}
+
+  - name: the replica is promoted
+    timeout: 1m
+    exec:
+      pod: '{{ .Vars.replica }}'
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli INFO replication']
+      expect: {contains: ['role:master']}
+
+  - name: the cluster recovers to Ready with three healthy shards
+    timeout: 5m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: demo}
+      match:
+        status: {state: Ready, reason: ClusterHealthy, shards: 3, readyShards: 3}
+      cel: *ready
+
+  - name: six ValkeyNodes are ready again with one primary per shard
+    timeout: 3m
+    assert:
+      list: {apiVersion: valkey.io/v1alpha1, kind: ValkeyNode, selector: valkey.io/cluster=demo}
+      count: 6
+      cel:
+        - items.all(n, has(n.status.ready) && n.status.ready)
+        - >-
+          items.all(n, items.filter(m, m.metadata.labels['valkey.io/shard-index'] == n.metadata.labels['valkey.io/shard-index']
+          && has(m.status.role) && m.status.role == 'primary').size() == 1)
+
+  - name: the recreated node rejoined shard 0 as a replica
+    timeout: 3m
+    exec:
+      pod: '{{ .Vars.primary }}'
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli INFO replication']
+      expect:
+        contains: ['role:slave', 'master_link_status:up']
+
+  - name: every key written before the failover is readable
+    timeout: 2m
+    exec:
+      pod: '{{ .Vars.replica }}'
+      container: server
+      command:
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          n=$(for i in $(seq 1 50); do echo "get tb:failover:$i"; done | valkey-cli -c | grep -c '^v[0-9]*$');
+          echo vals=$n
+      expect: {contains: ['vals=50']}
