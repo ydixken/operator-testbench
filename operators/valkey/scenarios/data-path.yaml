@@ -1,0 +1,105 @@
+# Smoke: real reads and writes through the cluster. Everything runs with
+# kubectl exec in the server container (pod IPs are not routable from the
+# runner) and valkey-cli -c, which follows MOVED redirects across shards. The
+# server container carries VALKEYCLI_AUTH with the _operator password and
+# valkey-cli would send it as the default user's AUTH, so every command unsets
+# it first (upstream does the same). The exporter image is FROM scratch, so the
+# metrics check talks to the sidecar over the pod's shared network namespace
+# from bash in the server container: valkey/valkey:9.0.0 is Debian based and
+# ships bash but neither curl nor wget.
+apiVersion: testbench.dev/v1alpha1
+kind: Scenario
+labels: [smoke]
+priority: 1
+steps:
+  - name: apply a 3x1 cluster
+    timeout: 1m
+    apply: {file: manifests/cluster-3x1.yaml}
+
+  - name: the cluster reports Ready for the applied generation
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: demo}
+      match:
+        status: {state: Ready, shards: 3, readyShards: 3}
+      cel:
+        - >-
+          self.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True'
+          && c.reason == 'ClusterHealthy' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'Progressing' && c.status == 'False'
+          && c.reason == 'ReconcileComplete' && c.observedGeneration == self.metadata.generation)
+        - self.status.conditions.filter(c, c.type == 'Degraded' && c.status == 'True').size() == 0
+
+  - name: 500 keys are written across all shards
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=demo
+      container: server
+      command:
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          n=$(awk 'BEGIN{for(i=1;i<=500;i++) print "SET tb:key:"i" val:"i}' | valkey-cli -c -h 127.0.0.1 | grep -c '^OK$');
+          echo ok=$n
+      expect: {contains: ['ok=500']}
+
+  - name: all 500 keys read back, following cluster redirects
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=demo
+      container: server
+      command:
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          n=$(awk 'BEGIN{for(i=1;i<=500;i++) print "GET tb:key:"i}' | valkey-cli -c -h 127.0.0.1 | grep -c '^val:');
+          echo vals=$n
+      expect: {contains: ['vals=500']}
+
+  - name: the headless Service name resolves and answers inside the namespace
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=demo
+      container: server
+      command:
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          valkey-cli -c -h valkey-demo.{{ .Namespace }}.svc.cluster.local CLUSTER INFO
+      expect: {contains: ['cluster_state:ok']}
+
+  - name: spec.config reached the running server
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=demo
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli CONFIG GET maxmemory']
+      expect: {contains: ['52428800']}
+
+  - name: every pod runs the pinned exporter sidecar on 9121
+    timeout: 2m
+    assert:
+      list: {apiVersion: v1, kind: Pod, selector: valkey.io/cluster=demo}
+      count: 6
+      cel:
+        - >-
+          items.all(p, p.spec.containers.exists(c, c.name == 'metrics-exporter'
+          && c.image == 'oliver006/redis_exporter:v1.88.0' && c.ports.exists(pt, pt.containerPort == 9121)))
+
+  - name: the exporter scrapes its server (redis_up 1)
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=demo
+      container: server
+      command:
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9121;
+          printf 'GET /metrics HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n' >&3;
+          grep -E '^redis_up 1' <&3
+      expect: {contains: ['redis_up 1']}

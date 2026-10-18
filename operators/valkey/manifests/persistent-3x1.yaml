@@ -1,0 +1,26 @@
+# Persistence-restart main cluster: what upstream's restart test builds
+# inline at v0.7.1, plus the pack's image pins and resources. reclaimPolicy
+# Retain is the default; it is written out because the scenario asserts the
+# retained PVCs. appendonly is quoted: YAML 1.1 reads a bare yes as a boolean
+# and spec.config is a string map.
+apiVersion: valkey.io/v1alpha1
+kind: ValkeyCluster
+metadata:
+  name: persist
+spec:
+  shards: 3
+  replicas: 1
+  persistence:
+    size: 1Gi
+    reclaimPolicy: Retain
+  config:
+    appendonly: 'yes'
+  image: valkey/valkey:9.0.0
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  exporter:
+    image: oliver006/redis_exporter:v1.88.0
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}

@@ -1,0 +1,100 @@
+# 1x0 -> 1x1 by re-applying the full object. The replica joins through
+# CLUSTER REPLICATE and must sync, so roles are read live from INFO replication
+# on the two pods by name: no failover has happened, so node 0 is still the
+# primary (upstream: valkeycluster_test.go at v0.7.1). ValkeyNode status.role is
+# checked too, as the converged view.
+apiVersion: testbench.dev/v1alpha1
+kind: Scenario
+labels: [scale]
+priority: 1
+steps:
+  - name: apply a single shard without replicas
+    timeout: 1m
+    apply: {file: manifests/single-1x0.yaml}
+
+  - name: the single shard is Ready
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: single}
+      match:
+        status: {state: Ready, shards: 1, readyShards: 1}
+      cel: &ready
+        - >-
+          self.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True'
+          && c.reason == 'ClusterHealthy' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'Progressing' && c.status == 'False'
+          && c.reason == 'ReconcileComplete' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'ClusterFormed' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'SlotsAssigned' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - self.status.conditions.filter(c, c.type == 'Degraded' && c.status == 'True').size() == 0
+
+  - name: one ValkeyNode, and it is the primary
+    timeout: 2m
+    assert:
+      list: {apiVersion: valkey.io/v1alpha1, kind: ValkeyNode, selector: valkey.io/cluster=single}
+      count: 1
+      cel:
+        - items.all(n, has(n.status.ready) && n.status.ready && has(n.status.role) && n.status.role == 'primary')
+
+  - name: the cluster knows one node
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=single
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli CLUSTER INFO']
+      expect:
+        contains: ['cluster_state:ok', 'cluster_known_nodes:1', 'cluster_size:1']
+
+  - name: add one replica by re-applying the full object
+    timeout: 1m
+    apply: {file: manifests/single-1x1.yaml}
+
+  - name: the shard is Ready again for the new generation
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: single}
+      match:
+        status: {state: Ready, shards: 1, readyShards: 1}
+      cel: *ready
+
+  - name: two ValkeyNodes, one primary and one replica, both ready
+    timeout: 3m
+    assert:
+      list: {apiVersion: valkey.io/v1alpha1, kind: ValkeyNode, selector: valkey.io/cluster=single}
+      count: 2
+      cel:
+        - items.all(n, has(n.status.ready) && n.status.ready)
+        - items.filter(n, has(n.status.role) && n.status.role == 'primary').size() == 1
+        - items.filter(n, has(n.status.role) && n.status.role == 'replica').size() == 1
+
+  - name: node 0 serves as master with one connected replica
+    timeout: 3m
+    exec:
+      pod: valkey-single-0-0-0
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli INFO replication']
+      expect:
+        contains: ['role:master', 'connected_slaves:1']
+
+  - name: node 1 replicates with its link up
+    timeout: 3m
+    exec:
+      pod: valkey-single-0-1-0
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli INFO replication']
+      expect:
+        contains: ['role:slave', 'master_link_status:up']
+
+  - name: the cluster knows two nodes in one shard
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=single
+      container: server
+      command: [sh, -c, 'unset VALKEYCLI_AUTH REDISCLI_AUTH; valkey-cli CLUSTER INFO']
+      expect:
+        contains: ['cluster_state:ok', 'cluster_known_nodes:2', 'cluster_size:1']

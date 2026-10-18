@@ -1,0 +1,129 @@
+# 2x1 -> 3x1 -> 2x1 by re-applying the full object under the testbench's
+# field owner, so the shard count is the only diff and no patch step is
+# needed. Slot ownership is read from CLUSTER NODES the way upstream does: a
+# master line has more than eight fields only when it owns slot ranges. Atomic
+# slot migration needs Valkey 9.0+, which the manifests pin. The longest
+# scenario (two slot migrations), hence priority 3 so it starts first.
+apiVersion: testbench.dev/v1alpha1
+kind: Scenario
+labels: [scale]
+priority: 3
+steps:
+  - name: apply a 2x1 cluster
+    timeout: 1m
+    apply: {file: manifests/scale-2x1.yaml}
+
+  - name: two shards are Ready
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: scale}
+      match:
+        status: {state: Ready, shards: 2, readyShards: 2}
+      cel: &ready
+        - >-
+          self.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True'
+          && c.reason == 'ClusterHealthy' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'Progressing' && c.status == 'False'
+          && c.reason == 'ReconcileComplete' && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'ClusterFormed' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - >-
+          self.status.conditions.exists(c, c.type == 'SlotsAssigned' && c.status == 'True'
+          && c.observedGeneration == self.metadata.generation)
+        - self.status.conditions.filter(c, c.type == 'Degraded' && c.status == 'True').size() == 0
+
+  - name: seed 500 keys so the migration moves real data
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=scale
+      container: server
+      command:
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          n=$(awk 'BEGIN{for(i=1;i<=500;i++) print "SET tb:key:"i" val:"i}' | valkey-cli -c -h 127.0.0.1 | grep -c '^OK$');
+          echo ok=$n
+      expect: {contains: ['ok=500']}
+
+  - name: scale out to three shards
+    timeout: 1m
+    apply: {file: manifests/scale-3x1.yaml}
+
+  - name: three primaries own slots
+    timeout: 10m
+    exec:
+      selector: valkey.io/cluster=scale
+      container: server
+      command: &primaries-with-slots
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          n=$(valkey-cli -c -h 127.0.0.1 CLUSTER NODES | awk '$3 ~ /master/ && NF > 8' | grep -c .);
+          echo primaries=$n
+      expect: {contains: ['primaries=3']}
+
+  - name: three shards are Ready for the new generation
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: scale}
+      match:
+        status: {state: Ready, shards: 3, readyShards: 3}
+      cel: *ready
+
+  - name: six ValkeyNodes exist
+    timeout: 2m
+    assert:
+      list: {apiVersion: valkey.io/v1alpha1, kind: ValkeyNode, selector: valkey.io/cluster=scale}
+      count: 6
+
+  - name: all 500 keys survived the rebalance
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=scale
+      container: server
+      command: &read-keys
+        - sh
+        - -c
+        - >-
+          unset VALKEYCLI_AUTH REDISCLI_AUTH;
+          n=$(awk 'BEGIN{for(i=1;i<=500;i++) print "GET tb:key:"i}' | valkey-cli -c -h 127.0.0.1 | grep -c '^val:');
+          echo vals=$n
+      expect: {contains: ['vals=500']}
+
+  - name: scale back in to two shards
+    timeout: 1m
+    apply: {file: manifests/scale-2x1.yaml}
+
+  - name: only two primaries own slots
+    timeout: 10m
+    exec:
+      selector: valkey.io/cluster=scale
+      container: server
+      command: *primaries-with-slots
+      expect: {contains: ['primaries=2']}
+
+  - name: the drained shard's ValkeyNodes are gone
+    timeout: 5m
+    assert:
+      list: {apiVersion: valkey.io/v1alpha1, kind: ValkeyNode, selector: valkey.io/cluster=scale}
+      count: 4
+
+  - name: two shards are Ready for the new generation
+    timeout: 10m
+    assert:
+      object: {apiVersion: valkey.io/v1alpha1, kind: ValkeyCluster, name: scale}
+      match:
+        status: {state: Ready, shards: 2, readyShards: 2}
+      cel: *ready
+
+  - name: all 500 keys survived the drain
+    timeout: 2m
+    exec:
+      selector: valkey.io/cluster=scale
+      container: server
+      command: *read-keys
+      expect: {contains: ['vals=500']}

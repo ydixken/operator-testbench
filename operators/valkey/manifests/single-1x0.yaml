@@ -1,0 +1,18 @@
+# Scale-replicas start state: one shard, no replica. Identical to
+# single-1x1.yaml except spec.replicas.
+apiVersion: valkey.io/v1alpha1
+kind: ValkeyCluster
+metadata:
+  name: single
+spec:
+  shards: 1
+  replicas: 0
+  image: valkey/valkey:9.0.0
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  exporter:
+    image: oliver006/redis_exporter:v1.88.0
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}
