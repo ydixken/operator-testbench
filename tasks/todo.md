@@ -31,12 +31,12 @@ Design: the brainstorming spec in `docs/superpowers/specs/2026-10-18-operator-te
 - [x] `ci: run the valkey pack on kind for every pull request`; protection extended with e2e-kind (2026-10-18).
 - [x] `feat(valkey): data-path, scale-replicas, scale-shards and persistence-restart scenarios`; 67 of 67 specs green locally in 3 min 52 s (2026-10-18).
 - [x] `feat(valkey): shard role Go step and the failover chaos scenario`; `task e2e:kind OPERATOR=valkey LABELS=chaos` green locally (10 of 10 specs, 79 s, 2026-10-18).
-- [ ] `ci: nightly chaos run on kind that opens an issue on failure`; one dispatched run proves it.
+- [x] `ci: nightly chaos run on kind that opens an issue on failure`; dispatched run https://github.com/ydixken/operator-testbench/actions/runs/39081622022 passed on 54d0991 (2026-10-18).
 - [x] `docs: concepts, scenarios, packs, environments, reference and troubleshooting`; STE pages lint clean.
 
 ### Verification
 
 - [x] Full non-chaos suite with `--procs=2` under 50 minutes on ubuntu-latest: about 5 minutes end to end on the merge of #3 (2026-10-18).
-- [ ] From a clean workstation: `task kind:up`, `task e2e:kind OPERATOR=valkey`, `task e2e:kind OPERATOR=valkey LABELS=chaos`, no `testbench` namespace or release left, `task kind:down`.
+- [x] From a clean workstation: `task e2e:kind OPERATOR=valkey` (67 of 67), `task e2e:kind OPERATOR=valkey LABELS=chaos` (10 of 10), no `testbench` namespace or release left, `task kind:down` (2026-10-18).
 
 Mark a remote gate done only with its run URL and the exact SHA.
