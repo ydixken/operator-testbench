@@ -13,6 +13,7 @@ Symptoms mapped to causes and fixes.
 | `not satisfied after 10m0s: object lacks the expected subset`. | The operator did not reach the expected state in time. | Read the `namespace` and `controller logs` report entries attached to the failed step: pods, events in time order, and the controller's last lines. |
 | `nothing matches Pod valkey.io/cluster=x; a delete that finds nothing is a mistake in the scenario`. | A selector with a typo. | Fix the selector; an empty delete is never a pass. |
 | `go step valkey.shardRoles: ... no pod of the shard reports role:master yet`. | The shard has no primary yet, or the pods are not Running. | Give the step more time, or assert readiness before it. |
+| `unknown flag: --platform` while preloading images. | Docker older than 28, which cannot save one platform of an image. The preload needs that for Docker's containerd image store. | Update Docker. |
 | `Error response from daemon: toomanyrequests` while preloading images. | Docker Hub's anonymous pull limit on a shared runner address. | Rerun later; the preload pulls each image once, which is the mitigation. |
 | A kept namespace will not delete. | Objects with finalizers, and the operator that owns them is gone. | Run the pack once more with `KEEP=false`, or install the operator and delete the namespace afterwards. |
 | `label "x:" has nothing after ':'` or `contains one of &|!,()/`. | A label Ginkgo cannot filter on. | Rename the label. |
