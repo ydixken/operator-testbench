@@ -31,6 +31,7 @@ Helm waits for the hook, and its `--timeout` (default 5 minutes) MUST be longer 
 | Value | Default | Meaning |
 |-------|---------|---------|
 | `operator.namespace` | required | The namespace the installed operator runs in. |
+| `operator.version` | the pack's | `TESTBENCH_OPERATOR_VERSION`: expect a patch release of the operator version the pack pins. |
 | `pack` | `valkey` | The pack under `operators/`. |
 | `image.repository`, `image.tag` | `ghcr.io/ydixken/operator-testbench`, the chart's appVersion | The testbench image. Keep the tag empty, so chart and image come from one release. |
 | `procs` | `1` | Ginkgo processes. Each process gets its own scenario namespaces. |
@@ -113,6 +114,11 @@ spec:
 ```
 
 Argo CD runs the Job as a PostSync hook on every sync.
+
+## How the chart is tested
+
+The workflow `e2e-kind-cluster.yml` does on every pull request what a deploying repository does: it installs valkey-operator from its upstream chart, then this chart from the working tree with an image built in the job, and runs the smoke scenarios.
+A second run with `operator.version` set to a version the cluster does not run MUST fail.
 
 ## Recovery and pitfalls
 

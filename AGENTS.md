@@ -94,6 +94,7 @@ Development happens on **GitHub** (`ydixken/operator-testbench`, PRs there).
 - Scenario files are parsed and validated before `RunSpecs`, from a sorted file walk, so every parallel process builds the same spec tree and a typo fails the run before any cluster call.
 - CI is **GitHub Actions** ([.github/workflows/](.github/workflows/)) on hosted runners only.
   The merge gate on `main` is the four jobs `lint`, `test`, and `docs` in [ci.yml](.github/workflows/ci.yml) and `e2e-kind` in [e2e-kind.yml](.github/workflows/e2e-kind.yml), which runs the full non-chaos suite on an ephemeral kind cluster for every pull request.
+  [e2e-kind-cluster.yml](.github/workflows/e2e-kind-cluster.yml) deploys the image and the chart against valkey-operator from its upstream chart, runs the smoke scenarios in cluster mode, and proves that a wrong operator version fails; it is not part of the merge gate.
   [nightly.yml](.github/workflows/nightly.yml) runs the chaos scenarios and opens an issue on failure.
   Releases are git tags; [release.yml](.github/workflows/release.yml) creates the GitHub release with generated notes and pushes the image and the chart to ghcr.io.
 

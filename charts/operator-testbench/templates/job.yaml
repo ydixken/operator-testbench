@@ -60,6 +60,8 @@ spec:
               value: skip
             - name: TESTBENCH_OPERATOR_NAMESPACE
               value: {{ .Values.operator.namespace | quote }}
+            - name: TESTBENCH_OPERATOR_VERSION
+              value: {{ .Values.operator.version | quote }}
             - name: TESTBENCH_NAMESPACES
               value: provided
             - name: TESTBENCH_FORCE

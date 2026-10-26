@@ -45,8 +45,10 @@ One pull request each, on local branches; nothing is pushed until the author has
 
 ### 5. `ci` and `docs`: cluster-mode kind job
 
-- [ ] `e2e-kind-cluster`: upstream valkey-operator chart, image via `kind load`, chart from the working tree, `labelFilter: smoke`; a second install with a wrong version MUST fail.
-- [ ] Docs for the new job; the rest shipped with PRs 3 and 4.
+- [x] `e2e-kind-cluster`: upstream valkey-operator chart, image via `kind load`, chart from the working tree, `labelFilter: smoke`; a second install with a wrong version MUST fail.
+- [x] Docs for the new job; the rest shipped with PRs 3 and 4.
+- [x] Chart value `operator.version` (`TESTBENCH_OPERATOR_VERSION`), which the negative run needs.
+- [x] `task lint` and `task test` green locally (2026-10-26); the job itself runs only in CI.
 
 ### Open questions
 
