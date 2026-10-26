@@ -29,8 +29,9 @@ One pull request each, on local branches; nothing is pushed until the author has
 
 ### 3. `feat`: container image
 
-- [ ] Multi-stage `Dockerfile`: `ginkgo build`, ginkgo CLI, pinned static kubectl, distroless `static-debian12:nonroot`, Renovate annotations.
-- [ ] `task image:build`; `release.yml` pushes `ghcr.io/ydixken/operator-testbench:<tag>` for amd64 and arm64, no `latest`.
+- [x] Multi-stage `Dockerfile`: `ginkgo build`, ginkgo CLI, pinned static kubectl, distroless `static-debian12:nonroot`, Renovate annotations.
+- [x] `task image:build`; `release.yml` pushes `ghcr.io/ydixken/operator-testbench:<tag>` for amd64 and arm64, no `latest`.
+- [x] `task lint` and `task test` green locally; both platforms cross-compile statically (2026-10-26). No local Docker: the first image build runs in CI.
 
 ### 4. `feat(chart)`: Helm chart
 

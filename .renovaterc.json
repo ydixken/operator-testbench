@@ -78,6 +78,14 @@
       "versioningTemplate": "pep440"
     },
     {
+      "description": "Versions the Dockerfile downloads itself carry a renovate comment on the line before their ARG.",
+      "customType": "regex",
+      "managerFilePatterns": ["Dockerfile"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+ARG \\w+=(?<currentValue>\\S+)"
+      ]
+    },
+    {
       "description": "golangci-lint pin, read by the CI action and by task lint.",
       "customType": "regex",
       "managerFilePatterns": [".golangci-lint-version"],

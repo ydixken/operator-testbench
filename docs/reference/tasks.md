@@ -9,6 +9,7 @@ The cluster-touching targets read the current kubectl context, show it, and pass
 | `task test` | no | `go test ./... -skip '^TestE2E$' -race` with coverage. Parses every embedded pack. |
 | `task kind:up [OPERATOR=valkey]` | no | Creates the kind cluster `testbench` from `hack/kind/<OPERATOR>.yaml` when it does not exist, selects the context `kind-testbench`, and preloads the pack's images. |
 | `task kind:down` | no | Deletes the kind cluster `testbench`. |
+| `task image:build [TAG=dev]` | no | Builds the testbench image for the local platform as `operator-testbench:<TAG>`. Needs Docker. |
 | `task e2e OPERATOR=<pack>` | yes | The pack's scenarios without the `chaos` label, against the current context, one Ginkgo process. |
 | `task e2e:focus OPERATOR=<pack> FOCUS=<regex>` | yes | One scenario or step by Ginkgo focus regex. `KEEP` defaults to `true`. |
 | `task e2e:unattended OPERATOR=<pack> EXPECT_CONTEXT=<context>` | no | `e2e` without the prompt. `EXPECT_CONTEXT` must equal the current context. `LABELS` defaults to `!chaos`. |
