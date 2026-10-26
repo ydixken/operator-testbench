@@ -45,6 +45,13 @@ tasks:
     cmds:
       - go test ./... -skip '^TestE2E$' -race -covermode atomic -coverprofile cover.out
 
+  image:build:
+    desc: >-
+      Build the testbench image for the local platform as
+      operator-testbench:TAG (default dev). The release builds amd64 and arm64.
+    cmds:
+      - docker build -t 'operator-testbench:{{.TAG | default "dev"}}' .
+
   kind:up:
     desc: >-
       Create the local kind cluster 'testbench' from hack/kind/<OPERATOR>.yaml

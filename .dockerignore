@@ -1,0 +1,10 @@
+# The build needs go.mod, go.sum, internal/, operators/ and test/.
+.git
+.github
+.claude
+.agents
+docs
+hack
+tasks
+reports
+cover.out
