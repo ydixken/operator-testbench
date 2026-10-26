@@ -40,6 +40,7 @@ nav:
   - Operators:
       - Valkey: operators/valkey.md
   - Environments: environments.md
+  - Deploying to a cluster: deploying.md
   - Reference:
       - Scenario schema: reference/scenario-schema.md
       - Pack schema: reference/pack-schema.md

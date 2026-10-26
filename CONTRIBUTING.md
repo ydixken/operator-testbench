@@ -124,7 +124,7 @@ Run a new scenario locally with `task e2e:kind OPERATOR=<pack> FOCUS='<scenario>
 
 Tags `vX.Y.Z` are the release.
 `release.yml` creates the GitHub release with notes generated from the merged pull requests; a tag with a hyphen is marked as a prerelease.
-It also pushes the image `ghcr.io/ydixken/operator-testbench:<tag>` for `linux/amd64` and `linux/arm64`, without a `latest` tag: an image fits only the operator versions its packs pin.
+It also pushes the chart to `oci://ghcr.io/ydixken/charts/operator-testbench` (version `<tag>` without the `v`, appVersion `<tag>`), and the image `ghcr.io/ydixken/operator-testbench:<tag>` for `linux/amd64` and `linux/arm64`, without a `latest` tag: an image fits only the operator versions its packs pin.
 Versions are plain SemVer, and pre-1.0 means the YAML schema can change.
 
 ## Commits and pull requests

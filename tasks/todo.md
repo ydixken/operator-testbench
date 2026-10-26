@@ -35,15 +35,18 @@ One pull request each, on local branches; nothing is pushed until the author has
 
 ### 4. `feat(chart)`: Helm chart
 
-- [ ] `charts/operator-testbench`: namespaces, scenario ClusterRole and RoleBindings, operator-pod Role, ServiceAccount, hook Job.
-- [ ] `task chart:generate` writes `files/scenarios.yaml` from the embedded packs; a unit test checks it is current.
-- [ ] `task chart:lint` (`helm lint --strict`, `helm template` through yamllint) runs from `task lint`.
-- [ ] `release.yml` pushes the chart to `oci://ghcr.io/ydixken/charts/operator-testbench`.
+- [x] `charts/operator-testbench`: namespaces, scenario ClusterRole and RoleBindings, operator-pod Role, ServiceAccount, hook Job.
+- [x] `task chart:generate` writes `files/scenarios.yaml` from the embedded packs; a unit test checks it is current.
+- [x] `task chart:lint` (`helm lint --strict`, `helm template` through yamllint) runs from `task lint`.
+- [x] `release.yml` pushes the chart to `oci://ghcr.io/ydixken/charts/operator-testbench`.
+- [x] `docs/deploying.md` (values, RBAC, version coupling, Flux and Argo CD, recovery) moved here from PR 5, since docs ship with the change.
+- [x] Deviations from the spec: `timeoutMinutes` instead of `timeout: 1h`, because Helm templates cannot parse a duration; chart version is the tag without `v`, appVersion the tag.
+- [x] `task lint` and `task test` green locally, `helm lint --strict` and the rendered output clean (2026-10-26).
 
 ### 5. `ci` and `docs`: cluster-mode kind job
 
 - [ ] `e2e-kind-cluster`: upstream valkey-operator chart, image via `kind load`, chart from the working tree, `labelFilter: smoke`; a second install with a wrong version MUST fail.
-- [ ] `docs/deploying.md` in the nav; `docs/reference/tasks.md`; `README.md` and `AGENTS.md` for `charts/`, `Dockerfile` and the run model.
+- [ ] Docs for the new job; the rest shipped with PRs 3 and 4.
 
 ### Open questions
 

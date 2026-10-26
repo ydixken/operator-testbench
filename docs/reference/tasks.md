@@ -5,10 +5,12 @@ The cluster-touching targets read the current kubectl context, show it, and pass
 
 | Target | Prompts | What it does |
 |--------|---------|--------------|
-| `task lint` | no | `yamllint --strict .`, the docs link check, `actionlint` when installed, and `golangci-lint run`. |
+| `task lint` | no | `yamllint --strict .`, the docs link check, `actionlint` when installed, `golangci-lint run`, and `task chart:lint`. |
 | `task test` | no | `go test ./... -skip '^TestE2E$' -race` with coverage. Parses every embedded pack. |
 | `task kind:up [OPERATOR=valkey]` | no | Creates the kind cluster `testbench` from `hack/kind/<OPERATOR>.yaml` when it does not exist, selects the context `kind-testbench`, and preloads the pack's images. |
 | `task kind:down` | no | Deletes the kind cluster `testbench`. |
+| `task chart:generate` | no | Writes `charts/operator-testbench/files/scenarios.yaml` from the embedded packs. `task test` fails while it is stale. |
+| `task chart:lint` | no | `helm lint --strict` on the chart, and its rendered output through `yamllint`. Part of `task lint`. |
 | `task image:build [TAG=dev]` | no | Builds the testbench image for the local platform as `operator-testbench:<TAG>`. Needs Docker. |
 | `task e2e OPERATOR=<pack>` | yes | The pack's scenarios without the `chaos` label, against the current context, one Ginkgo process. |
 | `task e2e:focus OPERATOR=<pack> FOCUS=<regex>` | yes | One scenario or step by Ginkgo focus regex. `KEEP` defaults to `true`. |

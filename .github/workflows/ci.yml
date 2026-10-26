@@ -42,6 +42,16 @@ jobs:
           "$HOME/.local/bin/actionlint"
       - name: Docs links
         run: ./hack/check-docs-links.sh
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+      - name: Helm chart
+        # The same commands as task chart:lint.
+        run: |
+          helm lint --strict charts/operator-testbench --set operator.namespace=valkey-operator-system
+          helm template testbench charts/operator-testbench -n operator-testbench \
+            --set operator.namespace=valkey-operator-system --set procs=2 \
+            | yamllint -d relaxed --no-warnings -
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

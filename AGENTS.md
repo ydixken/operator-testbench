@@ -86,15 +86,16 @@ Development happens on **GitHub** (`ydixken/operator-testbench`, PRs there).
 
 ## Architecture key points
 
-- Layout: `internal/testbench` is the engine (schema, loader, matchers, CEL, steps, install, diagnostics), written at Gomega level and never importing Ginkgo; `operators/` holds the packs, embedded with `go:embed`; `test/e2e` is the Ginkgo suite entry and holds the explicit registry of Go steps; `hack/kind` holds the kind cluster configs.
+- Layout: `internal/testbench` is the engine (schema, loader, matchers, CEL, steps, install, diagnostics), written at Gomega level and never importing Ginkgo; `operators/` holds the packs, embedded with `go:embed`; `test/e2e` is the Ginkgo suite entry and holds the explicit registry of Go steps; `hack/kind` holds the kind cluster configs; `Dockerfile` and `charts/operator-testbench` ship the suite as an image and a chart for cluster mode.
 - Run model: the operator is installed once per run in `SynchronizedBeforeSuite` on process 1, behind a single-tenant lock on its Helm release.
   Every scenario runs in its own namespace, one per Ginkgo process.
   Each scenario is one `Ordered` container and each step one `It`.
+  In cluster mode (`TESTBENCH_OPERATOR_INSTALL=skip`, `TESTBENCH_NAMESPACES=provided`, run by the chart's hook Job) the suite installs nothing, checks the running operator's version, and uses namespaces the chart created.
 - Scenario files are parsed and validated before `RunSpecs`, from a sorted file walk, so every parallel process builds the same spec tree and a typo fails the run before any cluster call.
 - CI is **GitHub Actions** ([.github/workflows/](.github/workflows/)) on hosted runners only.
   The merge gate on `main` is the four jobs `lint`, `test`, and `docs` in [ci.yml](.github/workflows/ci.yml) and `e2e-kind` in [e2e-kind.yml](.github/workflows/e2e-kind.yml), which runs the full non-chaos suite on an ephemeral kind cluster for every pull request.
   [nightly.yml](.github/workflows/nightly.yml) runs the chaos scenarios and opens an issue on failure.
-  Releases are git tags; [release.yml](.github/workflows/release.yml) creates the GitHub release with generated notes.
+  Releases are git tags; [release.yml](.github/workflows/release.yml) creates the GitHub release with generated notes and pushes the image and the chart to ghcr.io.
 
 ## The solution ladder ("ponytail")
 

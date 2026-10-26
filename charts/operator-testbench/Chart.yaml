@@ -1,0 +1,13 @@
+apiVersion: v2
+name: operator-testbench
+description: >-
+  Runs the operator-testbench scenarios against the operator a cluster already
+  runs, as a Helm hook Job after every install and upgrade.
+type: application
+# The release job packages the chart with the git tag: version without the
+# leading v, appVersion with it, so the default image tag is the testbench tag.
+version: 0.0.0-dev
+appVersion: dev
+home: https://github.com/ydixken/operator-testbench
+sources:
+  - https://github.com/ydixken/operator-testbench

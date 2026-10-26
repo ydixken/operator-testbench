@@ -36,6 +36,7 @@ tasks:
           [ "$have" = "$want" ] || echo "lint: golangci-lint $have differs from the CI pin $want"
       - cmd: |-
           if [ -f go.mod ]; then golangci-lint run; else echo "lint: no go.mod yet, skipping Go lint"; fi
+      - task: chart:lint
 
   test:
     desc: >-
@@ -44,6 +45,22 @@ tasks:
       TESTBENCH_CONTEXT leaked into the shell.
     cmds:
       - go test ./... -skip '^TestE2E$' -race -covermode atomic -coverprofile cover.out
+
+  chart:generate:
+    desc: Write the chart's scenario list (charts/operator-testbench/files/scenarios.yaml) from the embedded packs.
+    cmds:
+      - UPDATE_CHART=1 go test ./test/e2e -skip '^TestE2E$' -run '^TestChartScenariosAreCurrent$' -count=1
+
+  chart:lint:
+    desc: >-
+      helm lint --strict on the chart, and its rendered output through yamllint
+      (relaxed: rendered YAML is checked for syntax and duplicate keys, not style).
+    cmds:
+      - helm lint --strict charts/operator-testbench --set operator.namespace=valkey-operator-system
+      - >-
+        helm template testbench charts/operator-testbench -n operator-testbench
+        --set operator.namespace=valkey-operator-system --set procs=2
+        | yamllint -d relaxed --no-warnings -
 
   image:build:
     desc: >-

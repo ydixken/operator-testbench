@@ -1,0 +1,50 @@
+image:
+  repository: ghcr.io/ydixken/operator-testbench
+  tag: ""  # empty means the chart's appVersion, the testbench release
+  pullPolicy: IfNotPresent
+
+# The pack under operators/ to run. Its scenario list is in files/scenarios.yaml.
+pack: valkey
+
+operator:
+  # Required: the namespace the installed operator runs in.
+  namespace: ""
+
+# Ginkgo processes. Every process gets its own scenario namespaces. One by
+# default, to go easy on a shared cluster.
+procs: 1
+# Ginkgo label filter. Chaos scenarios delete pods; run them only on purpose.
+labelFilter: "!chaos"
+# Bounds the whole run: ginkgo --timeout and the Job's activeDeadlineSeconds.
+timeoutMinutes: 60
+# TESTBENCH_FORCE: deletes what an aborted run left in the scenario namespaces.
+force: false
+
+# Added to every scenario namespace, for example Pod Security or a mesh opt-out.
+namespaceLabels: {}
+podAnnotations: {}
+podLabels: {}
+resources: {}
+nodeSelector: {}
+tolerations: []
+
+# The scenario role, bound in each scenario namespace. The chart adds what the
+# engine itself needs (the namespace, pods and their exec, PVCs, events).
+packs:
+  valkey:
+    rules:
+      - apiGroups: [valkey.io]
+        resources: [valkeyclusters]
+        verbs: [get, list, watch, create, patch, update, delete]
+      - apiGroups: [valkey.io]
+        resources: [valkeynodes]
+        verbs: [get, list, watch]
+      - apiGroups: [""]
+        resources: [configmaps, secrets, services]
+        verbs: [get, list]
+      - apiGroups: [apps]
+        resources: [statefulsets]
+        verbs: [get, list]
+      - apiGroups: [policy]
+        resources: [poddisruptionbudgets]
+        verbs: [get, list]
