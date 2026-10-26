@@ -64,7 +64,7 @@ data:
 // IsObjectNamespaced.
 func mapper() meta.RESTMapper {
 	m := meta.NewDefaultRESTMapper([]schema.GroupVersion{corev1.SchemeGroupVersion, valkeyGV})
-	for _, kind := range []string{"Pod", "ConfigMap", "Secret", "Service"} {
+	for _, kind := range []string{"Pod", "ConfigMap", "Secret", "Service", "PersistentVolumeClaim"} {
 		m.Add(corev1.SchemeGroupVersion.WithKind(kind), meta.RESTScopeNamespace)
 	}
 	m.Add(corev1.SchemeGroupVersion.WithKind("Namespace"), meta.RESTScopeRoot)
@@ -375,6 +375,60 @@ func TestCleanupDeletesAppliedObjectsThenTheNamespace(t *testing.T) {
 	}
 	if err := kept.run.Client.Get(ctx, client.ObjectKey{Name: testNamespace}, &left); err != nil {
 		t.Errorf("kept namespace gone: %v", err)
+	}
+}
+
+func TestProvidedNamespace(t *testing.T) {
+	ctx := context.Background()
+	provided := func(force bool, objs ...client.Object) *harness {
+		h := newHarness(t, nil, objs...)
+		h.run.Provided, h.run.Force = true, force
+		h.run.Scenario.Steps = []Step{{Name: "apply", Apply: &ApplyStep{File: "manifests/cluster.yaml"}}}
+		return h
+	}
+	err := provided(false).run.EnsureNamespace(ctx)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") || !strings.Contains(err.Error(), EnvNamespaces) {
+		t.Errorf("missing provided namespace = %v", err)
+	}
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}}
+	h := provided(false, ns)
+	if err := h.run.EnsureNamespace(ctx); err != nil {
+		t.Fatalf("empty provided namespace = %v", err)
+	}
+	if err := h.run.Step(ctx, step(t, "  - {name: apply, apply: {file: manifests/cluster.yaml}}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run.Cleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run.Client.Get(ctx, client.ObjectKey{Name: testNamespace}, &corev1.Namespace{}); err != nil {
+		t.Errorf("Cleanup deleted a provided namespace: %v", err)
+	}
+	if !strings.Contains(h.log.String(), "deleted ValkeyCluster demo") {
+		t.Errorf("Cleanup left the applied objects:\n%s", h.log.String())
+	}
+
+	left := func() []client.Object {
+		vc := &unstructured.Unstructured{}
+		vc.SetGroupVersionKind(valkeyCluster)
+		vc.SetNamespace(testNamespace)
+		vc.SetName("demo")
+		pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "data", Namespace: testNamespace}}
+		return []client.Object{ns.DeepCopy(), vc, pod("valkey-0", corev1.PodRunning, nil), pvc}
+	}
+	err = provided(false, left()...).run.EnsureNamespace(ctx)
+	for _, want := range []string{"ValkeyCluster demo", "Pod valkey-0", "PersistentVolumeClaim data", EnvForce} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("leftovers = %v, want it to name %q", err, want)
+		}
+	}
+	h = provided(true, left()...)
+	if err := h.run.EnsureNamespace(ctx); err != nil {
+		t.Fatalf("forced EnsureNamespace = %v", err)
+	}
+	if rest, err := h.run.leftovers(ctx); err != nil || len(rest) > 0 {
+		t.Errorf("after force, leftovers = %d, %v", len(rest), err)
 	}
 }
 

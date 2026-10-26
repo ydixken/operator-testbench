@@ -90,6 +90,9 @@ type OperatorSpec struct {
 	// Selector matches the controller pods in Namespace: the readiness wait
 	// and the failure log tail both use it.
 	Selector string `json:"selector"`
+	// Container names the controller container, whose image tag the version
+	// check reads. Empty means the pod's only container.
+	Container string `json:"container,omitempty"`
 }
 
 // InstallSpec is the install recipe: CRDs first, then the Helm chart.
@@ -594,6 +597,11 @@ func (p *OperatorPack) Validate() error {
 		fail("operator.selector is empty")
 	} else if _, err := labels.Parse(p.Operator.Selector); err != nil {
 		fail("operator.selector: %v", err)
+	}
+	if c := p.Operator.Container; c != "" {
+		if msgs := validation.NameIsDNSLabel(c, false); len(msgs) > 0 {
+			fail("operator.container %q: %s", c, strings.Join(msgs, "; "))
+		}
 	}
 	for i, u := range p.Install.CRDs {
 		if !strings.HasPrefix(u, "https://") {

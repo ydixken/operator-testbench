@@ -61,7 +61,7 @@ We make the context an explicit input because the suite installs an operator and
 It creates the kind cluster `testbench` from `hack/kind/<pack>.yaml` when it does not exist, selects the context `kind-testbench`, preloads the pack's workload images into the cluster, and runs the suite unattended with two Ginkgo processes.
 `task kind:down` deletes the cluster.
 
-A run installs the pack's operator once, on Ginkgo process 1, before any scenario: it applies the CRD manifests the pack names with `kubectl apply --server-side`, installs the Helm chart at the pinned version with `--skip-crds --wait`, and waits for a pod matching the pack's controller selector to be Ready.
+A run installs the pack's operator once, on Ginkgo process 1, before any scenario: it applies the CRD manifests the pack names with `kubectl apply --server-side`, installs the Helm chart at the pinned version with `--skip-crds --wait`, and waits until a pod matching the pack's controller selector is Ready and every Ready one runs the pack's version as its image tag.
 It refuses a CRD that exists without its field manager, because another install of the operator owns it, and with `install.helm.watchNamespacesValue` the installed operator watches only the scenario namespaces.
 The suite is single-tenant per cluster: `helm status` on the pack's release name is the lock, and a release that already exists fails the run unless `TESTBENCH_FORCE=true` takes it over.
 Every scenario then runs in its own namespace, `testbench-<pack>-<scenario>` on process 1 and with a `-<N>` suffix on process N, and deletes what it applied and then the namespace when it ends.
@@ -77,12 +77,14 @@ A run reads these environment variables, each shown with the default it takes wh
   Required once `TESTBENCH_CONTEXT` opens the gate; an unknown pack fails the run rather than skipping it, because a skipped suite exits 0.
 - `TESTBENCH_OPERATOR_VERSION` (the pack's `operator.version`) overrides the operator version: the CRD URLs and the Helm values the pack templates with `{{ .Version }}` follow it.
   It is a patch-level knob; a minor that changes the API needs the chart version, the CRDs, and the scenarios bumped together in one PR.
-- `TESTBENCH_OPERATOR_INSTALL` (`helm`) set to `skip` uses an operator that is already installed on the context, and only waits for a pod matching the pack's selector in the pack's operator namespace.
+- `TESTBENCH_OPERATOR_INSTALL` (`helm`) set to `skip` uses an operator that is already installed on the context, and only waits for a pod matching the pack's selector in the operator namespace, running the pack's version.
+- `TESTBENCH_OPERATOR_NAMESPACE` (the pack's `operator.namespace`) is the operator namespace; with `skip`, where the installed operator runs.
+- `TESTBENCH_NAMESPACES` (`managed`) set to `provided` means the scenario namespaces exist before the run: the engine never creates or deletes them, and refuses one that is not empty unless `TESTBENCH_FORCE=true` clears it.
 - `TESTBENCH_KEEP` (unset) keeps the scenario namespaces when `true`, for iteration; the operator is uninstalled regardless, and the next run installs it again before it touches the kept namespaces.
   A kept namespace that holds objects with finalizers deletes only while the operator runs.
 - `TESTBENCH_FORCE` (unset) takes over the Helm release a crashed run left behind when `true`, and replaces CRDs another install owns.
 
-The Task targets expose these as `VERSION=`, `INSTALL=`, `KEEP=`, and `FORCE=`, plus `FOCUS=` (a Ginkgo focus regex), `TIMEOUT=` (a Go duration bounding the whole run, default `1h`), and `PROCS=` on `e2e:kind` (default `2`).
+The Task targets expose these as `VERSION=`, `INSTALL=`, `OPERATOR_NAMESPACE=`, `NAMESPACES=`, `KEEP=`, and `FORCE=`, plus `FOCUS=` (a Ginkgo focus regex), `TIMEOUT=` (a Go duration bounding the whole run, default `1h`), and `PROCS=` on `e2e:kind` (default `2`).
 `-ginkgo.timeout` always equals `-timeout`, because Ginkgo's own suite timeout defaults to 1h and would abort a long run on its own.
 
 Scenarios labelled `chaos` delete pods and are excluded from `task e2e`, `task e2e:kind`, and the pull request gate (`--label-filter='!chaos'`).

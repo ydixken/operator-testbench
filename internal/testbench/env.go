@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/api/validation"
 )
 
 // The run's knobs. TESTBENCH_CONTEXT is read by the gate in test/e2e; the
@@ -33,11 +35,20 @@ const (
 	EnvInstall  = "TESTBENCH_OPERATOR_INSTALL"
 	EnvKeep     = "TESTBENCH_KEEP"
 	EnvForce    = "TESTBENCH_FORCE"
+	// EnvOperatorNamespace overrides the pack's operator.namespace.
+	EnvOperatorNamespace = "TESTBENCH_OPERATOR_NAMESPACE"
+	EnvNamespaces        = "TESTBENCH_NAMESPACES"
 
 	// InstallHelm installs the pack's chart; InstallSkip expects the operator
 	// to be there already and only waits for it.
 	InstallHelm = "helm"
 	InstallSkip = "skip"
+
+	// NamespacesManaged: the engine creates and deletes the scenario
+	// namespaces. NamespacesProvided: they exist before the run, and the
+	// engine never creates or deletes them.
+	NamespacesManaged  = "managed"
+	NamespacesProvided = "provided"
 )
 
 // Env is the parsed configuration of one run.
@@ -50,6 +61,10 @@ type Env struct {
 	Version string
 	// Install is InstallHelm or InstallSkip.
 	Install string
+	// OperatorNamespace replaces the pack's operator.namespace when set.
+	OperatorNamespace string
+	// Namespaces is NamespacesManaged or NamespacesProvided.
+	Namespaces string
 	// Keep leaves the scenario namespaces in place at the end.
 	Keep bool
 	// Force takes over a Helm release a crashed run left behind.
@@ -65,6 +80,9 @@ func ParseEnv(getenv func(string) string) (Env, error) {
 		Operator: getenv(EnvOperator),
 		Version:  getenv(EnvVersion),
 		Install:  getenv(EnvInstall),
+
+		OperatorNamespace: getenv(EnvOperatorNamespace),
+		Namespaces:        getenv(EnvNamespaces),
 	}
 	var errs []error
 	if e.Operator == "" {
@@ -82,6 +100,20 @@ func ParseEnv(getenv func(string) string) (Env, error) {
 	default:
 		errs = append(errs, fmt.Errorf("%s=%s must be %s or %s",
 			EnvInstall, strconv.Quote(e.Install), InstallHelm, InstallSkip))
+	}
+	if e.OperatorNamespace != "" {
+		if msgs := validation.NameIsDNSLabel(e.OperatorNamespace, false); len(msgs) > 0 {
+			errs = append(errs, fmt.Errorf("%s=%s: %s", EnvOperatorNamespace, strconv.Quote(e.OperatorNamespace),
+				strings.Join(msgs, "; ")))
+		}
+	}
+	switch e.Namespaces {
+	case "":
+		e.Namespaces = NamespacesManaged
+	case NamespacesManaged, NamespacesProvided:
+	default:
+		errs = append(errs, fmt.Errorf("%s=%s must be %s or %s",
+			EnvNamespaces, strconv.Quote(e.Namespaces), NamespacesManaged, NamespacesProvided))
 	}
 	var err error
 	if e.Keep, err = parseBool(EnvKeep, getenv(EnvKeep)); err != nil {

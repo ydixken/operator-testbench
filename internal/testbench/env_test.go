@@ -30,18 +30,20 @@ func TestParseEnvDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Env{Context: "kind-testbench", Operator: "valkey", Install: InstallHelm}
+	want := Env{Context: "kind-testbench", Operator: "valkey", Install: InstallHelm, Namespaces: NamespacesManaged}
 	if e != want {
 		t.Errorf("ParseEnv = %+v, want %+v", e, want)
 	}
 	e, err = ParseEnv(getenvFrom(map[string]string{
 		EnvContext: "kind-testbench", EnvOperator: "valkey", EnvVersion: "v0.7.0",
 		EnvInstall: InstallSkip, EnvKeep: "true", EnvForce: "true",
+		EnvOperatorNamespace: "valkey-operator-system", EnvNamespaces: NamespacesProvided,
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = Env{Context: "kind-testbench", Operator: "valkey", Version: "v0.7.0", Install: InstallSkip, Keep: true, Force: true}
+	want = Env{Context: "kind-testbench", Operator: "valkey", Version: "v0.7.0", Install: InstallSkip, Keep: true, Force: true,
+		OperatorNamespace: "valkey-operator-system", Namespaces: NamespacesProvided}
 	if e != want {
 		t.Errorf("ParseEnv = %+v, want %+v", e, want)
 	}
@@ -58,6 +60,10 @@ func TestParseEnvQuotesBadValues(t *testing.T) {
 		{"version with a slash", map[string]string{EnvOperator: "valkey", EnvVersion: "tags/v1"}, []string{`"tags/v1"`}},
 		{"bad install", map[string]string{EnvOperator: "valkey", EnvInstall: "kustomize"}, []string{`"kustomize"`, "helm or skip"}},
 		{"keep is not a bool", map[string]string{EnvOperator: "valkey", EnvKeep: "True"}, []string{EnvKeep + `="True"`}},
+		{"bad operator namespace", map[string]string{EnvOperator: "valkey", EnvOperatorNamespace: "Ops_NS"},
+			[]string{EnvOperatorNamespace + `="Ops_NS"`}},
+		{"bad namespaces", map[string]string{EnvOperator: "valkey", EnvNamespaces: "shared"},
+			[]string{`"shared"`, "managed or provided"}},
 		{"force is not a bool", map[string]string{EnvOperator: "valkey", EnvForce: "yes"}, []string{EnvForce + `="yes"`}},
 		{"everything at once", map[string]string{EnvInstall: "x", EnvKeep: "y"}, []string{EnvOperator, EnvInstall, EnvKeep}},
 	} {

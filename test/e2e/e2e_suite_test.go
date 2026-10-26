@@ -65,6 +65,9 @@ func loadSuite(getenv func(string) string) (*suiteState, error) {
 	if err != nil {
 		return nil, err
 	}
+	if env.OperatorNamespace != "" {
+		pack.Spec.Operator.Namespace = env.OperatorNamespace
+	}
 	return &suiteState{Env: env, Pack: pack}, nil
 }
 
@@ -135,7 +138,8 @@ var _ = SynchronizedBeforeSuite(func(ctx SpecContext) []byte {
 	connect()
 	inst := installer()
 	if suite.Env.Install == testbench.InstallSkip {
-		By("waiting for the operator already installed in " + suite.Pack.Spec.Operator.Namespace)
+		By(fmt.Sprintf("waiting for %s %s, already installed in %s", suite.Pack.Name, suite.Pack.Version,
+			suite.Pack.Spec.Operator.Namespace))
 		Expect(inst.WaitReady(ctx)).To(Succeed())
 		return nil
 	}
@@ -154,6 +158,11 @@ var _ = SynchronizedAfterSuite(func() {}, func(ctx SpecContext) {
 		func() error {
 			if suite.Env.Keep {
 				By("keeping the scenario namespaces of pack " + suite.Pack.Name)
+				return nil
+			}
+			// Provided namespaces are not the suite's to delete, and finding
+			// them by label would need the right to list every namespace.
+			if suite.Env.Namespaces == testbench.NamespacesProvided {
 				return nil
 			}
 			By("deleting every scenario namespace of pack " + suite.Pack.Name)

@@ -53,13 +53,47 @@ Every knob is an environment variable; the Task targets expose them as variables
 | `TESTBENCH_CONTEXT` | set by the task | unset | The gate. MUST equal the current context, or `in-cluster`. |
 | `TESTBENCH_OPERATOR` | `OPERATOR` | required | The pack under `operators/`. An unknown pack fails the run. |
 | `TESTBENCH_OPERATOR_VERSION` | `VERSION` | the pack's | Overrides the operator version in the CRD URLs and Helm values. |
-| `TESTBENCH_OPERATOR_INSTALL` | `INSTALL` | `helm` | `skip` uses an operator already installed in the pack's namespace, and only waits for it. |
+| `TESTBENCH_OPERATOR_INSTALL` | `INSTALL` | `helm` | `skip` uses an operator already installed in the operator namespace, and only waits for it. |
+| `TESTBENCH_OPERATOR_NAMESPACE` | `OPERATOR_NAMESPACE` | the pack's | The operator namespace. With `INSTALL=skip`, where the installed operator runs. |
+| `TESTBENCH_NAMESPACES` | `NAMESPACES` | `managed` | `provided`: the scenario namespaces exist before the run, and the engine never creates or deletes them. |
 | `TESTBENCH_KEEP` | `KEEP` | `false` | `true` leaves the scenario namespaces in place at the end. |
 | `TESTBENCH_FORCE` | `FORCE` | `false` | `true` takes over a Helm release a crashed run left behind, and replaces CRDs another install owns. |
 
 The Task targets add `FOCUS` (a Ginkgo focus regex), `LABELS` (a Ginkgo label filter), `TIMEOUT` (a Go duration bounding the whole run, default `1h`), and, on `e2e:kind`, `PROCS` (default `2`).
 
 A knob with a value it does not understand fails the run with the value quoted; a typo is never ignored.
+
+## The version check
+
+Every run checks which operator version it tests, after the operator is Ready and before the first scenario.
+The engine reads the image tag of the controller container in every Ready controller pod (`operator.container`, or the only container) and compares it with the pack's version or `TESTBENCH_OPERATOR_VERSION`, ignoring one leading `v`.
+It waits up to five minutes while a rollout still replaces old pods.
+The run fails when the tags still differ, and at once when an image has no tag (digest only) or the container does not exist.
+A testbench release fits only the operator version its pack pins.
+
+## Testing the installed operator
+
+Cluster mode tests the operator a cluster already runs, and installs nothing cluster-scoped:
+
+```sh
+task e2e OPERATOR=valkey INSTALL=skip OPERATOR_NAMESPACE=valkey-operator-system NAMESPACES=provided
+```
+
+With `NAMESPACES=provided`, every scenario namespace MUST exist before the run: `testbench-<pack>-<scenario>`, with `-<N>` for Ginkgo process N > 1.
+The Helm chart of the testbench creates them; without it, create them yourself, for example:
+
+```sh
+for s in operators/valkey/scenarios/*.yaml; do
+  kubectl create namespace "testbench-valkey-$(basename "$s" .yaml)"
+done
+```
+
+A provided namespace MUST hold no pods, no PersistentVolumeClaims, and no objects of the kinds the scenario applies.
+Otherwise the run fails and lists them; `FORCE=true` deletes them first, in that namespace only.
+At the end the engine deletes what it applied and keeps the namespace.
+
+The identity then needs, in each scenario namespace, what the scenarios do (for valkey: the custom resources, pods, `pods/exec`, PVCs and the objects the operator creates that the scenarios read), and `get` and `list` on pods in the operator namespace.
+It needs no cluster-wide rights.
 
 ## Keeping fixtures
 
@@ -71,4 +105,5 @@ A kept namespace that holds objects with finalizers, such as Valkey's `ValkeyNod
 
 Nothing in the scenario namespaces or the operator namespace.
 The pack's CRDs stay, on purpose.
-On kind, the retained PersistentVolumeClaims of a persistence scenario go with their namespace.
+The persistence scenario deletes its retained PersistentVolumeClaims in its last step.
+With `NAMESPACES=provided`, the scenario namespaces stay.
