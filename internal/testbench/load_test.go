@@ -78,6 +78,21 @@ func TestLoadPackRendersAndSortsScenarios(t *testing.T) {
 	}
 }
 
+func TestPackNamespaces(t *testing.T) {
+	p, err := LoadPack(packFS(), "valkey", "", knownSteps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for procs, want := range map[int]string{
+		0: "testbench-valkey-alpha,testbench-valkey-cluster-ready",
+		2: "testbench-valkey-alpha,testbench-valkey-cluster-ready,testbench-valkey-alpha-2,testbench-valkey-cluster-ready-2",
+	} {
+		if got := strings.Join(p.Namespaces(procs), ","); got != want {
+			t.Errorf("Namespaces(%d) = %s, want %s", procs, got, want)
+		}
+	}
+}
+
 func TestLoadPackVersionOverrideWins(t *testing.T) {
 	p, err := LoadPack(packFS(), "valkey", "v0.8.0-rc.1", knownSteps)
 	if err != nil {

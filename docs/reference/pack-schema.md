@@ -27,7 +27,7 @@ An unknown field is an error.
 
 | Field | Type | Required | Rule |
 |-------|------|----------|------|
-| `crds` | list of strings | no | HTTPS URLs of CRD manifests. Each URL is a template with `{{ .Version }}`. The engine applies them server-side before the chart. |
+| `crds` | list of strings | no | HTTPS URLs of CRD manifests. Each URL is a template with `{{ .Version }}`. The engine applies them server-side before the chart. If a CRD exists and the field manager `operator-testbench` does not manage it, the run stops. `TESTBENCH_FORCE=true` replaces the CRD. |
 | `helm` | object | yes | See `helm`. |
 
 ## helm
@@ -39,8 +39,11 @@ An unknown field is an error.
 | `version` | string | yes | The chart version. |
 | `release` | string | yes | A DNS label. The release name. It is also the lock of the run. |
 | `set` | map of strings | no | Values for `--set`. Each value is a template with `{{ .Version }}`. A key must not be empty. |
+| `watchNamespacesValue` | string | no | The key of the chart list value that sets the namespaces that the operator watches. One key, without `=`, `,` or spaces. It must not also be a key in `set`. |
 
 The engine runs `helm install <release> <chart> --repo <repo> --version <version> -n <namespace> --skip-crds --wait --timeout 5m`, with one `--set` per entry.
+If `watchNamespacesValue` has a value, the engine adds `--set <watchNamespacesValue>={<namespaces>}`.
+The list has the namespace of each scenario on each Ginkgo process.
 
 ## Renovate comments
 

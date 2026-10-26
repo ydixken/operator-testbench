@@ -51,6 +51,18 @@ type Pack struct {
 	FS fs.FS
 }
 
+// Namespaces lists every scenario namespace of a run on procs Ginkgo
+// processes, the same names NamespaceFor gives each process.
+func (p *Pack) Namespaces(procs int) []string {
+	names := make([]string, 0, max(procs, 1)*len(p.Scenarios))
+	for proc := 1; proc <= max(procs, 1); proc++ {
+		for _, s := range p.Scenarios {
+			names = append(names, NamespaceFor(p.Name, s.Name, proc))
+		}
+	}
+	return names
+}
+
 // TemplateData is what a scenario's templated fields see.
 type TemplateData struct {
 	// Namespace is the scenario's namespace on this process.

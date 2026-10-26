@@ -221,6 +221,7 @@ install:
     version: 0.7.0
     release: testbench-valkey-operator
     set: {image.tag: "{{ .Version }}"}
+    watchNamespacesValue: manager.watchNamespaces
 `
 
 func parsePack(t *testing.T, text string) error {
@@ -248,6 +249,8 @@ func TestPackValidation(t *testing.T) {
 		{"empty chart version", "version: 0.7.0", "version: ''", "install.helm.version"},
 		{"bad release", "release: testbench-valkey-operator", "release: Testbench", "install.helm.release"},
 		{"set bad template", `set: {image.tag: "{{ .Version }}"}`, `set: {image.tag: "{{ .Version"}`, "install.helm.set[image.tag]"},
+		{"watch value with comma", "watchNamespacesValue: manager.watchNamespaces", "watchNamespacesValue: a,b", "single value key"},
+		{"watch value in set", "watchNamespacesValue: manager.watchNamespaces", "watchNamespacesValue: image.tag", "also a key"},
 		{"unknown field", "install:", "installs:", "unknown field"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

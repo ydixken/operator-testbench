@@ -55,7 +55,7 @@ Every knob is an environment variable; the Task targets expose them as variables
 | `TESTBENCH_OPERATOR_VERSION` | `VERSION` | the pack's | Overrides the operator version in the CRD URLs and Helm values. |
 | `TESTBENCH_OPERATOR_INSTALL` | `INSTALL` | `helm` | `skip` uses an operator already installed in the pack's namespace, and only waits for it. |
 | `TESTBENCH_KEEP` | `KEEP` | `false` | `true` leaves the scenario namespaces in place at the end. |
-| `TESTBENCH_FORCE` | `FORCE` | `false` | `true` takes over a Helm release a crashed run left behind. |
+| `TESTBENCH_FORCE` | `FORCE` | `false` | `true` takes over a Helm release a crashed run left behind, and replaces CRDs another install owns. |
 
 The Task targets add `FOCUS` (a Ginkgo focus regex), `LABELS` (a Ginkgo label filter), `TIMEOUT` (a Go duration bounding the whole run, default `1h`), and, on `e2e:kind`, `PROCS` (default `2`).
 

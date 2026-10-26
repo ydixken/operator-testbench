@@ -62,7 +62,7 @@ func TestInstallerCommandLines(t *testing.T) {
 	if _, err := inst.ReleaseExists(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := inst.ApplyCRDs(ctx); err != nil {
+	if err := inst.ApplyCRDs(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := inst.HelmInstall(ctx); err != nil {
@@ -73,10 +73,14 @@ func TestInstallerCommandLines(t *testing.T) {
 	}
 	want := []string{
 		"helm --kube-context kind-testbench status testbench-valkey-operator -n " + operatorNS,
+		"kubectl --context kind-testbench get -f " +
+			"https://raw.githubusercontent.com/valkey-io/valkey-operator/v0.7.1/config/crd/bases/valkey.io_valkeyclusters.yaml" +
+			" --ignore-not-found --no-headers -o custom-columns=NAME:.metadata.name,MANAGERS:.metadata.managedFields[*].manager",
 		"kubectl --context kind-testbench apply --server-side --force-conflicts --field-manager operator-testbench -f " +
 			"https://raw.githubusercontent.com/valkey-io/valkey-operator/v0.7.1/config/crd/bases/valkey.io_valkeyclusters.yaml",
 		"helm --kube-context kind-testbench install testbench-valkey-operator valkey-operator --repo https://valkey.io/valkey-helm" +
-			" --version 0.7.0 -n " + operatorNS + " --skip-crds --wait --timeout 5m --set image.tag=v0.7.1",
+			" --version 0.7.0 -n " + operatorNS + " --skip-crds --wait --timeout 5m --set image.tag=v0.7.1" +
+			" --set manager.watchNamespaces={testbench-valkey-alpha,testbench-valkey-cluster-ready}",
 		"helm --kube-context kind-testbench uninstall testbench-valkey-operator -n " + operatorNS + " --ignore-not-found --wait",
 	}
 	calls := cmds.calls()
@@ -160,7 +164,7 @@ func TestInstallHonoursTheLock(t *testing.T) {
 	for _, c := range cmds.calls()[1:] {
 		verbs = append(verbs, c[0]+" "+c[1])
 	}
-	if got := strings.Join(verbs, ", "); got != "helm status, helm uninstall, kubectl apply, helm install" {
+	if got := strings.Join(verbs, ", "); got != "helm status, helm uninstall, kubectl get, kubectl apply, helm install" {
 		t.Errorf("force path ran %s", got)
 	}
 	if !strings.Contains(log.String(), "taking over release") {
@@ -169,6 +173,51 @@ func TestInstallHonoursTheLock(t *testing.T) {
 	var ns corev1.Namespace
 	if err := inst.Client.Get(ctx, client.ObjectKey{Name: operatorNS}, &ns); err != nil || ns.Labels[LabelManagedBy] != FieldOwner {
 		t.Errorf("operator namespace not created with the engine's label: %v %v", err, ns.Labels)
+	}
+}
+
+func TestApplyCRDsRefusesForeignCRDs(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name, get string
+		force     bool
+		applied   bool
+		want      string
+	}{
+		{"absent", "true", false, true, ""},
+		{"own", "echo 'valkeyclusters.valkey.io   helm,operator-testbench'", false, true, ""},
+		{"foreign", "echo 'valkeyclusters.valkey.io   helm'", false, false, "CRD valkeyclusters.valkey.io exists"},
+		{"no managers", "echo 'valkeyclusters.valkey.io   <none>'", false, false, "field managers <none>"},
+		{"foreign forced", "echo 'valkeyclusters.valkey.io   helm'", true, true, "replacing CRD valkeyclusters.valkey.io"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst, cmds, log := newInstaller(t, "", []string{tc.get, "true"})
+			err := inst.ApplyCRDs(ctx, tc.force)
+			if applied := len(cmds.calls()) == 2; applied != tc.applied {
+				t.Errorf("applied = %t, want %t (err %v)", applied, tc.applied, err)
+			}
+			switch {
+			case tc.applied && err != nil:
+				t.Errorf("ApplyCRDs = %v", err)
+			case !tc.applied && (err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), EnvForce)):
+				t.Errorf("ApplyCRDs = %v, want an error containing %q and naming %s", err, tc.want, EnvForce)
+			case tc.applied && !strings.Contains(log.String(), tc.want):
+				t.Errorf("log lacks %q:\n%s", tc.want, log.String())
+			}
+		})
+	}
+}
+
+func TestHelmInstallWatchesEveryProcess(t *testing.T) {
+	inst, cmds, _ := newInstaller(t, "", []string{"true"})
+	inst.Procs = 2
+	if err := inst.HelmInstall(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	want := "--set manager.watchNamespaces={testbench-valkey-alpha,testbench-valkey-cluster-ready," +
+		"testbench-valkey-alpha-2,testbench-valkey-cluster-ready-2}"
+	if got := strings.Join(cmds.calls()[0], " "); !strings.HasSuffix(got, want) {
+		t.Errorf("helm install\n got %s\nwant suffix %s", got, want)
 	}
 }
 

@@ -17,9 +17,9 @@ limitations under the License.
 // Package e2e runs an operator pack's scenarios on the cluster behind the
 // current kubectl context, once TESTBENCH_CONTEXT names that context. The
 // suite installs the pack's operator into the pack's own namespace, runs every
-// scenario in a namespace of its own, and removes both again. Nothing outside
-// those namespaces is touched; a production install of the same operator in
-// another namespace is never checked or relied on.
+// scenario in a namespace of its own, and removes both again. Outside those
+// namespaces it applies only the pack's CRDs, and it refuses CRDs another
+// install of the operator owns unless TESTBENCH_FORCE is set.
 package e2e
 
 import (
@@ -121,9 +121,11 @@ func connect() {
 }
 
 func installer() *testbench.Installer {
+	suiteConfig, _ := GinkgoConfiguration()
 	return &testbench.Installer{
 		Pack: suite.Pack, Context: kubeContextName(), Client: k8sClient,
 		Command: commandContext, Log: GinkgoWriter, RetryDelay: testbench.RetryDelay,
+		Procs: suiteConfig.ParallelTotal,
 	}
 }
 

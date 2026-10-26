@@ -10,8 +10,8 @@ kind: OperatorPack
 operator:
   # renovate: datasource=github-releases depName=valkey-io/valkey-operator
   version: v0.7.1
-  # The engine creates this namespace and installs into it; a production
-  # install in the chart's default valkey-operator-system is never touched.
+  # The engine creates this namespace and installs into it. The CRDs are
+  # cluster-wide: the engine refuses CRDs another install owns.
   namespace: testbench-valkey-system
   # The chart labels its controller pods with both; the readiness wait and
   # the failure log tail select them with this.
@@ -34,3 +34,6 @@ install:
     release: testbench-valkey-operator
     set:
       image.tag: "{{ .Version }}"
+    # Passed as --watch-namespace, so this operator reconciles only the
+    # scenario namespaces and leaves any other ValkeyCluster alone.
+    watchNamespacesValue: manager.watchNamespaces

@@ -37,6 +37,7 @@ install:
     release: testbench-valkey-operator
     set:
       image.tag: "{{ .Version }}"
+    watchNamespacesValue: manager.watchNamespaces
 ```
 
 `operator.version` is the default operator version.
@@ -57,11 +58,24 @@ A pack therefore lists its CRD manifests under `install.crds`, and the engine ap
 The chart is installed with `--skip-crds`.
 The CRDs stay on the cluster after the run: deleting a CRD deletes every object of that kind, cluster-wide.
 
+Before it applies a manifest, the engine reads the field managers of the CRDs in it.
+A CRD that exists without the engine's field manager (`operator-testbench`) belongs to another install of the operator, and replacing it would change that operator's API.
+The run then fails and names the CRD.
+`TESTBENCH_FORCE=true` replaces it anyway and logs which CRD it replaced.
+
+## Watched namespaces
+
+Most operators watch every namespace by default.
+The installed operator would then reconcile objects that belong to someone else on the cluster.
+When the chart can restrict it, name that list value in `install.helm.watchNamespacesValue`.
+The engine sets it to every scenario namespace of the run, for every Ginkgo process, for example `--set manager.watchNamespaces={testbench-valkey-cluster-ready,...}`.
+Leave the field out for a chart without such a value.
+
 ## The single-tenant lock
 
 The engine installs the chart as `install.helm.release` in `operator.namespace`, and `helm status` on that release is the lock.
 When the release exists, another run is active on that cluster, or a crashed run left it behind, and the suite refuses to start.
-`TESTBENCH_FORCE=true` takes the release over.
+`TESTBENCH_FORCE=true` takes the release over, and also replaces CRDs that another install owns.
 
 ## Renovate
 
