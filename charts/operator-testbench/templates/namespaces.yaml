@@ -1,0 +1,19 @@
+{{- /* One namespace per scenario and Ginkgo process, with the engine's labels. */}}
+{{- range $proc := untilStep 1 (int (add1 .Values.procs)) 1 }}
+{{- range $scenario := include "testbench.scenarios" $ | fromYamlArray }}
+{{- $ns := printf "testbench-%s-%s" $.Values.pack $scenario }}
+{{- if gt $proc 1 }}{{ $ns = printf "%s-%d" $ns $proc }}{{ end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "testbench.labels" $ | nindent 4 }}
+    testbench.dev/pack: {{ $.Values.pack }}
+    testbench.dev/scenario: {{ $scenario }}
+    {{- with $.Values.namespaceLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}

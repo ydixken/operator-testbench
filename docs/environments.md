@@ -80,7 +80,7 @@ task e2e OPERATOR=valkey INSTALL=skip OPERATOR_NAMESPACE=valkey-operator-system 
 ```
 
 With `NAMESPACES=provided`, every scenario namespace MUST exist before the run: `testbench-<pack>-<scenario>`, with `-<N>` for Ginkgo process N > 1.
-The Helm chart of the testbench creates them; without it, create them yourself, for example:
+The [Helm chart](deploying.md) of the testbench creates them; without it, create them yourself, for example:
 
 ```sh
 for s in operators/valkey/scenarios/*.yaml; do

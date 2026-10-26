@@ -41,7 +41,8 @@ docs/                      # user docs, rendered to a site by mkdocs (mkdocs.yml
 .agents/skills/            # the same skills for agents that read the vendor-neutral location
 .github/workflows/         # CI (lint, test, docs), kind e2e per pull request, nightly chaos, docs deploy, release
 Dockerfile                 # the testbench image: compiled suite, ginkgo CLI, kubectl (distroless, no shell)
-Taskfile.yml               # task help | lint | test | kind:up | kind:down | e2e | e2e:kind | image:build
+charts/operator-testbench/ # the Helm chart: scenario namespaces, RBAC and the hook Job that runs cluster mode
+Taskfile.yml               # task help | lint | test | kind:up | kind:down | e2e | e2e:kind | image:build | chart:*
 ```
 
 ## Developing

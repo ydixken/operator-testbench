@@ -78,7 +78,7 @@ func mustParse(t *testing.T, path string) workflow {
 // A task that loses TESTBENCH_CONTEXT skips TestE2E, and the skip exits 0, so
 // the target reports green after running no specs. Task's env: block loses to
 // an exported value, so only an assignment in the command binds the confirmed
-// context.
+// context. A command that skips TestE2E itself runs only cluster-free tests.
 func TestE2ETasksNameTheirContext(t *testing.T) {
 	const prefix = "TESTBENCH_CONTEXT='{{.KUBE_CONTEXT}}' "
 	var tf struct {
@@ -93,7 +93,8 @@ func TestE2ETasksNameTheirContext(t *testing.T) {
 	for name, task := range tf.Tasks {
 		for _, c := range task.Cmds {
 			s := fmt.Sprint(c)
-			if !strings.Contains(s, "go test ./test/e2e") && !strings.Contains(s, "ginkgo/v2/ginkgo") {
+			if !strings.Contains(s, "go test ./test/e2e") && !strings.Contains(s, "ginkgo/v2/ginkgo") ||
+				strings.Contains(s, "-skip '^TestE2E$'") {
 				continue
 			}
 			runners = append(runners, name)

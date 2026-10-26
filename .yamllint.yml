@@ -6,6 +6,8 @@ ignore:
   - .worktrees/
   # mkdocs build output; its YAML files are verbatim copies of linted sources.
   - site/
+  # Helm templates are not YAML until rendered; task chart:lint lints the output.
+  - charts/*/templates/
 
 rules:
   document-start:

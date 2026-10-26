@@ -1,0 +1,96 @@
+{{- /*
+The run. A post-install and post-upgrade hook, so Helm, Flux and Argo CD
+report its result as the release's. The last Job and its logs stay until the
+next run replaces them.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "testbench.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "testbench.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  # Five minutes past ginkgo's own timeout, so ginkgo reports before the kill.
+  activeDeadlineSeconds: {{ add 300 (mul 60 (int .Values.timeoutMinutes)) }}
+  template:
+    metadata:
+      labels:
+        {{- include "testbench.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "testbench.fullname" . }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: testbench
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --procs={{ int .Values.procs }}
+            - -v
+            - --timeout={{ int .Values.timeoutMinutes }}m
+            - --poll-progress-after=5m
+            - --fail-on-empty
+            - --label-filter={{ .Values.labelFilter }}
+            - --junit-report=junit.xml
+            - --output-dir=/reports
+            - e2e.test
+            - --
+            - -test.run=^TestE2E$
+          env:
+            - name: TESTBENCH_CONTEXT
+              value: in-cluster
+            - name: TESTBENCH_OPERATOR
+              value: {{ .Values.pack | quote }}
+            - name: TESTBENCH_OPERATOR_INSTALL
+              value: skip
+            - name: TESTBENCH_OPERATOR_NAMESPACE
+              value: {{ .Values.operator.namespace | quote }}
+            - name: TESTBENCH_NAMESPACES
+              value: provided
+            - name: TESTBENCH_FORCE
+              value: {{ .Values.force | quote }}
+            # kubectl writes its discovery cache under HOME.
+            - name: HOME
+              value: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: reports
+              mountPath: /reports
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: reports
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
