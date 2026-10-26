@@ -109,6 +109,11 @@ type HelmSpec struct {
 	Release string `json:"release"`
 	// Set holds --set key=value pairs; values are templated with {{ .Version }}.
 	Set map[string]string `json:"set,omitempty"`
+	// WatchNamespacesValue names the chart's list value that restricts the
+	// operator to some namespaces. The install sets it to every scenario
+	// namespace of the run, so the operator leaves the cluster's own objects
+	// alone. Empty for a chart without such a value.
+	WatchNamespacesValue string `json:"watchNamespacesValue,omitempty"`
 }
 
 // Scenario is one scenarios/<name>.yaml: an ordered list of steps that run in
@@ -621,6 +626,11 @@ func (p *OperatorPack) Validate() error {
 		if err := checkTemplate(v); err != nil {
 			fail("install.helm.set[%s]: %v", k, err)
 		}
+	}
+	if w := h.WatchNamespacesValue; strings.ContainsAny(w, "=, \t\n") {
+		fail("install.helm.watchNamespacesValue %q must be a single value key", w)
+	} else if _, ok := h.Set[w]; ok && w != "" {
+		fail("install.helm.watchNamespacesValue %q is also a key of install.helm.set", w)
 	}
 	return errors.Join(errs...)
 }

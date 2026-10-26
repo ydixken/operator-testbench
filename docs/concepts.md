@@ -10,7 +10,9 @@ The pack is YAML only.
 A pack says nothing about clusters: the same pack runs on kind in CI and on whatever kubectl context you point it at.
 
 The engine installs the operator once per run, from the pack's Helm chart, after applying the pack's CRD manifests server-side.
-It installs into the namespace the pack names, which the engine creates, so a production install of the same operator elsewhere on the cluster is never touched.
+It installs into the namespace the pack names, which the engine creates.
+When the pack names the chart's watch-namespaces value, the installed operator reconciles only the scenario namespaces.
+CRDs are cluster-wide, so the engine refuses to replace CRDs that another install of the operator owns.
 
 ## Scenario
 

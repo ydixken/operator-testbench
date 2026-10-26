@@ -60,6 +60,9 @@ type Installer struct {
 	RetryDelay time.Duration
 	// ReadyTimeout bounds WaitReady; zero means readyTimeout.
 	ReadyTimeout time.Duration
+	// Procs is the run's number of Ginkgo processes; the watched namespaces
+	// cover the scenario namespaces of every process. Zero means one.
+	Procs int
 }
 
 func (i *Installer) logf(format string, args ...any) {
@@ -74,8 +77,9 @@ func helmArgs(kubeContext string, args ...string) []string {
 	return append([]string{"--kube-context", kubeContext}, args...)
 }
 
-// run executes one command with bounded retries and logs its redacted output.
-func (i *Installer) run(ctx context.Context, name string, args ...string) error {
+// run executes one command with bounded retries, logs its redacted output
+// and returns the output of the attempt that succeeded.
+func (i *Installer) run(ctx context.Context, name string, args ...string) (string, error) {
 	var last error
 	for attempt := 1; attempt <= commandAttempts; attempt++ {
 		out, err := i.Command(ctx, name, args...).CombinedOutput()
@@ -83,7 +87,7 @@ func (i *Installer) run(ctx context.Context, name string, args ...string) error 
 			i.logf("%s\n", redactLines(string(out)))
 		}
 		if err == nil {
-			return nil
+			return string(out), nil
 		}
 		last = fmt.Errorf("%s %s: %w: %s", name, redactLine(strings.Join(args, " ")), err,
 			redactLine(strings.TrimSpace(string(out))))
@@ -91,12 +95,12 @@ func (i *Installer) run(ctx context.Context, name string, args ...string) error 
 			i.logf("%s failed (attempt %d of %d), retrying\n", name, attempt, commandAttempts)
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return "", ctx.Err()
 			case <-time.After(i.RetryDelay):
 			}
 		}
 	}
-	return last
+	return "", last
 }
 
 // ReleaseExists is the single-tenant lock: a release under the pack's name in
@@ -116,14 +120,41 @@ func (i *Installer) ReleaseExists(ctx context.Context) (bool, error) {
 }
 
 // ApplyCRDs applies the pack's CRD manifests server-side, before the chart,
-// because Helm never upgrades the CRDs a chart carries.
-func (i *Installer) ApplyCRDs(ctx context.Context) error {
+// because Helm never upgrades the CRDs a chart carries. A CRD that exists
+// without the engine's field manager belongs to another install of the
+// operator, and replacing it would change that operator's API; force does.
+func (i *Installer) ApplyCRDs(ctx context.Context, force bool) error {
 	for _, url := range i.Pack.CRDs {
-		args := kubectlArgs(i.Context, "apply", "--server-side", "--force-conflicts",
-			"--field-manager", FieldOwner, "-f", url)
-		if err := i.run(ctx, "kubectl", args...); err != nil {
+		if err := i.checkCRDOwners(ctx, url, force); err != nil {
 			return err
 		}
+		args := kubectlArgs(i.Context, "apply", "--server-side", "--force-conflicts",
+			"--field-manager", FieldOwner, "-f", url)
+		if _, err := i.run(ctx, "kubectl", args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkCRDOwners reads the field managers of the CRDs in url that exist.
+func (i *Installer) checkCRDOwners(ctx context.Context, url string, force bool) error {
+	out, err := i.run(ctx, "kubectl", kubectlArgs(i.Context, "get", "-f", url, "--ignore-not-found", "--no-headers",
+		"-o", "custom-columns=NAME:.metadata.name,MANAGERS:.metadata.managedFields[*].manager")...)
+	if err != nil {
+		return err
+	}
+	for line := range strings.Lines(out) {
+		f := strings.Fields(line)
+		if len(f) < 2 || slices.Contains(strings.Split(f[1], ","), FieldOwner) {
+			continue
+		}
+		if !force {
+			return fmt.Errorf("CRD %s exists and this suite did not apply it (field managers %s): another install of"+
+				" the operator owns it. Test that operator with %s=%s, or rerun with %s=true to replace the CRD",
+				f[0], f[1], EnvInstall, InstallSkip, EnvForce)
+		}
+		i.logf("%s=true: replacing CRD %s, managed by %s\n", EnvForce, f[0], f[1])
 	}
 	return nil
 }
@@ -150,14 +181,19 @@ func (i *Installer) HelmInstall(ctx context.Context) error {
 	for _, k := range slices.Sorted(maps.Keys(i.Pack.HelmSet)) {
 		args = append(args, "--set", k+"="+i.Pack.HelmSet[k])
 	}
-	return i.run(ctx, "helm", helmArgs(i.Context, args...)...)
+	if h.WatchNamespacesValue != "" {
+		args = append(args, "--set", h.WatchNamespacesValue+"={"+strings.Join(i.Pack.Namespaces(i.Procs), ",")+"}")
+	}
+	_, err := i.run(ctx, "helm", helmArgs(i.Context, args...)...)
+	return err
 }
 
 // HelmUninstall removes the release; a release that is already gone is fine.
 func (i *Installer) HelmUninstall(ctx context.Context) error {
 	h := i.Pack.Spec.Install.Helm
-	return i.run(ctx, "helm", helmArgs(i.Context, "uninstall", h.Release, "-n", i.Pack.Spec.Operator.Namespace,
+	_, err := i.run(ctx, "helm", helmArgs(i.Context, "uninstall", h.Release, "-n", i.Pack.Spec.Operator.Namespace,
 		"--ignore-not-found", "--wait")...)
+	return err
 }
 
 // WaitReady waits until a pod matching the pack's controller selector is Ready.
@@ -191,7 +227,8 @@ func (i *Installer) WaitReady(ctx context.Context) error {
 }
 
 // Install is the whole install path: the lock, the CRDs, the namespace, the
-// chart, the readiness wait. force takes over a release a crashed run left.
+// chart, the readiness wait. force takes over a release a crashed run left,
+// and CRDs another install owns.
 func (i *Installer) Install(ctx context.Context, force bool) error {
 	held, err := i.ReleaseExists(ctx)
 	if err != nil {
@@ -209,7 +246,7 @@ func (i *Installer) Install(ctx context.Context, force bool) error {
 			return err
 		}
 	}
-	if err := i.ApplyCRDs(ctx); err != nil {
+	if err := i.ApplyCRDs(ctx, force); err != nil {
 		return err
 	}
 	if err := i.EnsureOperatorNamespace(ctx); err != nil {
