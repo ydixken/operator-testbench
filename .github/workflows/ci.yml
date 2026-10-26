@@ -1,7 +1,7 @@
 name: CI
 
 # Lint, test and build the docs on every push and pull request. These three
-# jobs plus the jobs of e2e-kind.yml and e2e-kind-cluster.yml are the required checks on main. Every job runs
+# jobs plus the jobs of e2e-kind.yml and e2e-kind-cluster.yml are the merge gate on main. Every job runs
 # on a hosted runner, so a fork's pull request runs the same steps with a
 # read-only token and no secrets.
 

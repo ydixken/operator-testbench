@@ -27,7 +27,8 @@ On a machine with Homebrew: `brew install go task kind golangci-lint yamllint ac
 1. Merge when the CI `lint`, `test`, `docs`, `e2e-kind`, and `e2e-kind-cluster` checks are green on the current head.
 
 `.github/workflows/ci.yml` runs lint, tests and the docs build on every push and pull request, `.github/workflows/e2e-kind.yml` runs the full non-chaos suite on an ephemeral kind cluster, and `.github/workflows/e2e-kind-cluster.yml` deploys the image and the chart in cluster mode against an upstream-installed operator.
-Those five jobs are the required checks on `main`.
+All five MUST be green before a merge.
+The branch protection enforces the first four; `e2e-kind-cluster` is checked by hand until a repository admin adds it.
 The pull request `lint` job runs GitHub Dependency Review and rejects new dependencies with moderate or higher known vulnerabilities, disallowed licenses, or violations in runtime, development, or unknown scopes.
 GitHub cannot fail Dependency Review for every unresolved license, so contributors MUST review those warnings and resolve each license from a public source before merging.
 

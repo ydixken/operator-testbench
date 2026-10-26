@@ -1,6 +1,6 @@
 # Plans
 
-## Cluster mode (done)
+## Cluster mode
 
 Design: `docs/superpowers/specs/2026-10-23-cluster-mode-design.md` (local only).
 One pull request each, on local branches; nothing is pushed until the author has reviewed it.
@@ -55,7 +55,11 @@ One pull request each, on local branches; nothing is pushed until the author has
 - Image and chart live under `ghcr.io/ydixken/...`, the chart under `charts/`; both packages are public.
 - The chart version is the testbench tag without `v`, its appVersion the tag.
 - `v0.1.0-rc.1` (prerelease) was cut from the head of #13 before the merge; #8, #9, #11, #12 and #13 merged on 2026-10-26.
-- `e2e-kind-cluster` joins the merge gate; the maintainer adds it to the branch protection.
+- `e2e-kind-cluster` joins the merge gate. Branch protection enforces only `lint`, `test`, `docs` and `e2e-kind` so far.
+
+### Open
+
+- [ ] A repository admin adds `e2e-kind-cluster` to the required status checks of `main`; until then, check it by hand before a merge.
 
 ## Bootstrap (done)
 
