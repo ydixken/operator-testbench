@@ -119,6 +119,7 @@ Argo CD runs the Job as a PostSync hook on every sync.
 
 The workflow `e2e-kind-cluster.yml` does on every pull request what a deploying repository does: it installs valkey-operator from its upstream chart, then this chart from the working tree with an image built in the job, and runs the smoke scenarios.
 A second run with `operator.version` set to a version the cluster does not run MUST fail.
+A pull request merges only when the job is green.
 
 ## Recovery and pitfalls
 

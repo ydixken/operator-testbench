@@ -37,7 +37,9 @@ const (
 	ciWorkflow      = "../../.github/workflows/ci.yml"
 	e2eKindWorkflow = "../../.github/workflows/e2e-kind.yml"
 	nightlyWorkflow = "../../.github/workflows/nightly.yml"
-	workflowDir     = "../../.github/workflows"
+	// e2eKindClusterWorkflow deploys the image and the chart in cluster mode.
+	e2eKindClusterWorkflow = "../../.github/workflows/e2e-kind-cluster.yml"
+	workflowDir            = "../../.github/workflows"
 )
 
 func read(t *testing.T, path string) string {
@@ -164,18 +166,27 @@ func TestCIRunsEveryClusterFreeTest(t *testing.T) {
 // Actions job under its id when it has no name: key. A renamed job would
 // leave the protection waiting for a check that never reports.
 func TestRequiredCheckJobsKeepTheirIDs(t *testing.T) {
-	wf := mustParse(t, ciWorkflow)
-	for _, id := range []string{"lint", "test", "docs"} {
-		job, ok := wf.Jobs[id]
-		if !ok {
-			t.Errorf("ci.yml has no %s job; branch protection requires that check", id)
-			continue
-		}
-		if job.Name != "" {
-			t.Errorf("ci.yml job %s sets name %q; the required check is the job id", id, job.Name)
-		}
-		if job.RunsOn != "ubuntu-latest" {
-			t.Errorf("ci.yml job %s runs on %q, want ubuntu-latest: no self-hosted runners in a public repo", id, job.RunsOn)
+	for _, tc := range []struct {
+		path string
+		ids  []string
+	}{
+		{ciWorkflow, []string{"lint", "test", "docs"}},
+		{e2eKindWorkflow, []string{"e2e-kind"}},
+		{e2eKindClusterWorkflow, []string{"e2e-kind-cluster"}},
+	} {
+		wf, file := mustParse(t, tc.path), filepath.Base(tc.path)
+		for _, id := range tc.ids {
+			job, ok := wf.Jobs[id]
+			if !ok {
+				t.Errorf("%s has no %s job; branch protection requires that check", file, id)
+				continue
+			}
+			if job.Name != "" {
+				t.Errorf("%s job %s sets name %q; the required check is the job id", file, id, job.Name)
+			}
+			if job.RunsOn != "ubuntu-latest" {
+				t.Errorf("%s job %s runs on %q, want ubuntu-latest: no self-hosted runners in a public repo", file, id, job.RunsOn)
+			}
 		}
 	}
 }
