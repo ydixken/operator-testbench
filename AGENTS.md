@@ -93,8 +93,8 @@ Development happens on **GitHub** (`ydixken/operator-testbench`, PRs there).
   In cluster mode (`TESTBENCH_OPERATOR_INSTALL=skip`, `TESTBENCH_NAMESPACES=provided`, run by the chart's hook Job) the suite installs nothing, checks the running operator's version, and uses namespaces the chart created.
 - Scenario files are parsed and validated before `RunSpecs`, from a sorted file walk, so every parallel process builds the same spec tree and a typo fails the run before any cluster call.
 - CI is **GitHub Actions** ([.github/workflows/](.github/workflows/)) on hosted runners only.
-  The merge gate on `main` is the four jobs `lint`, `test`, and `docs` in [ci.yml](.github/workflows/ci.yml) and `e2e-kind` in [e2e-kind.yml](.github/workflows/e2e-kind.yml), which runs the full non-chaos suite on an ephemeral kind cluster for every pull request.
-  [e2e-kind-cluster.yml](.github/workflows/e2e-kind-cluster.yml) deploys the image and the chart against valkey-operator from its upstream chart, runs the smoke scenarios in cluster mode, and proves that a wrong operator version fails; it is not part of the merge gate.
+  The merge gate on `main` is the five jobs `lint`, `test`, and `docs` in [ci.yml](.github/workflows/ci.yml), `e2e-kind` in [e2e-kind.yml](.github/workflows/e2e-kind.yml), which runs the full non-chaos suite on an ephemeral kind cluster for every pull request, and `e2e-kind-cluster`.
+  [e2e-kind-cluster.yml](.github/workflows/e2e-kind-cluster.yml) deploys the image and the chart against valkey-operator from its upstream chart, runs the smoke scenarios in cluster mode, and proves that a wrong operator version fails.
   [nightly.yml](.github/workflows/nightly.yml) runs the chaos scenarios and opens an issue on failure.
   Releases are git tags; [release.yml](.github/workflows/release.yml) creates the GitHub release with generated notes and pushes the image and the chart to ghcr.io.
 
@@ -120,7 +120,7 @@ Trimming those isn't simplicity, it's a bug.
 
 - Format touched files and run `task lint` locally before declaring a change ready for CI.
 - CI MUST run functional tests and documentation checks.
-- A pull request is ready to merge when `lint`, `test`, `docs`, and `e2e-kind` are green on its current head.
+- A pull request is ready to merge when `lint`, `test`, `docs`, `e2e-kind`, and `e2e-kind-cluster` are green on its current head.
   The kind job runs the full non-chaos suite, so the scenarios a change adds or edits ship in the same change.
 - Don't claim green without the command output to back it.
   "It should pass" is not a result.

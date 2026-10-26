@@ -55,7 +55,7 @@ One pull request each, on local branches; nothing is pushed until the author has
 - Image and chart live under `ghcr.io/ydixken/...`, the chart under `charts/`; both packages are public.
 - The chart version is the testbench tag without `v`, its appVersion the tag.
 - `v0.1.0-rc.1` (prerelease) was cut from the head of #13 before the merge; #8, #9, #11, #12 and #13 merged on 2026-10-26.
-- Open: does `e2e-kind-cluster` join the merge gate?
+- `e2e-kind-cluster` joins the merge gate; the maintainer adds it to the branch protection.
 
 ## Bootstrap (done)
 

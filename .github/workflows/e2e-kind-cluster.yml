@@ -4,7 +4,8 @@ name: E2E kind cluster mode
 # from its upstream chart as the cluster's own operator, then the testbench
 # chart from the working tree with an image built here. Smoke scenarios only,
 # because e2e-kind already runs the full suite. A second run that expects
-# another operator version MUST fail, which proves the version check.
+# another operator version MUST fail, which proves the version check. The job
+# id e2e-kind-cluster is a required check on main, so no paths: filter here.
 
 on:
   push:

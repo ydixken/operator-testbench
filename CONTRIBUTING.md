@@ -24,10 +24,10 @@ On a machine with Homebrew: `brew install go task kind golangci-lint yamllint ac
 1. Format touched files before every commit and run `task lint`.
 1. Run `task test`: it parses every embedded pack, so a broken scenario fails here, before a cluster is involved.
 1. Commit (see below), push the branch to GitHub, open a PR.
-1. Merge when the CI `lint`, `test`, `docs`, and `e2e-kind` checks are green on the current head.
+1. Merge when the CI `lint`, `test`, `docs`, `e2e-kind`, and `e2e-kind-cluster` checks are green on the current head.
 
-`.github/workflows/ci.yml` runs lint, tests and the docs build on every push and pull request, and `.github/workflows/e2e-kind.yml` runs the full non-chaos suite on an ephemeral kind cluster.
-Those four jobs are the required checks on `main`.
+`.github/workflows/ci.yml` runs lint, tests and the docs build on every push and pull request, `.github/workflows/e2e-kind.yml` runs the full non-chaos suite on an ephemeral kind cluster, and `.github/workflows/e2e-kind-cluster.yml` deploys the image and the chart in cluster mode against an upstream-installed operator.
+Those five jobs are the required checks on `main`.
 The pull request `lint` job runs GitHub Dependency Review and rejects new dependencies with moderate or higher known vulnerabilities, disallowed licenses, or violations in runtime, development, or unknown scopes.
 GitHub cannot fail Dependency Review for every unresolved license, so contributors MUST review those warnings and resolve each license from a public source before merging.
 
@@ -133,7 +133,7 @@ Versions are plain SemVer, and pre-1.0 means the YAML schema can change.
   Release notes are generated from pull request titles, so titles follow the same form.
 - One logical change per commit.
   Every commit MUST be lint-clean on its own.
-- `main` is protected: changes land via GitHub PRs, and `lint`, `test`, `docs`, and `e2e-kind` MUST be green.
+- `main` is protected: changes land via GitHub PRs, and `lint`, `test`, `docs`, `e2e-kind`, and `e2e-kind-cluster` MUST be green.
   Nobody pushes to `main` directly.
 - Commits MUST NOT carry a `Co-Authored-By:` trailer naming an AI agent, and pull request text MUST NOT carry an agent attribution line.
   Claude session URLs MUST NOT appear in commits, trailers, or PR text (see [AGENTS.md](AGENTS.md#writing-conventions)).
