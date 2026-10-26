@@ -1,0 +1,73 @@
+name: E2E kind cluster mode
+
+# Deploys the testbench the way a GitOps repository would: valkey-operator
+# from its upstream chart as the cluster's own operator, then the testbench
+# chart from the working tree with an image built here. Smoke scenarios only,
+# because e2e-kind already runs the full suite. A second run that expects
+# another operator version MUST fail, which proves the version check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-kind-cluster-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-kind-cluster:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.33.0
+          cluster_name: testbench
+          config: hack/kind/valkey.yaml
+          kubectl_version: v1.37.1
+          wait: 120s
+      - name: Preload the pack's images
+        run: ./hack/kind/preload-images.sh valkey testbench
+      - name: Install valkey-operator from its upstream chart
+        # The versions the pack pins, read from operator.yaml so a bump moves
+        # this job too. The upstream chart installs its own CRDs.
+        run: |
+          pack=operators/valkey/operator.yaml
+          version=$(awk '/^operator:/ {f = 1} f && /^  version:/ {print $2; exit}' "$pack")
+          chart=$(awk '/^  helm:/ {f = 1} f && /^    version:/ {print $2; exit}' "$pack")
+          helm install valkey-operator valkey-operator --repo https://valkey.io/valkey-helm --version "$chart" \
+            -n valkey-operator-system --create-namespace --set image.tag="$version" --wait --timeout 5m
+      - name: Build the testbench image and load it into kind
+        run: |
+          docker build -t operator-testbench:ci .
+          docker save --platform "linux/$(docker version --format '{{.Server.Arch}}')" -o testbench.tar operator-testbench:ci
+          kind load image-archive testbench.tar --name testbench
+      - name: Install the testbench chart, which runs the smoke scenarios
+        run: |
+          helm install testbench charts/operator-testbench -n operator-testbench --create-namespace \
+            --set operator.namespace=valkey-operator-system \
+            --set image.repository=operator-testbench --set image.tag=ci --set image.pullPolicy=Never \
+            --set labelFilter=smoke --timeout 30m
+      - name: Testbench log
+        if: always()
+        run: kubectl logs -n operator-testbench job/testbench-operator-testbench --tail=-1 || true
+      - name: A run that expects another operator version fails
+        run: |
+          if helm upgrade testbench charts/operator-testbench -n operator-testbench --reuse-values \
+            --set operator.version=v0.0.1 --timeout 15m; then
+            echo "::error::the testbench passed against an operator version it does not expect"
+            exit 1
+          fi
+          kubectl logs -n operator-testbench job/testbench-operator-testbench --tail=-1 \
+            | grep -F "expects operator version v0.0.1"
+      - name: Export kind logs
+        if: failure()
+        run: kind export logs reports/kind-logs --name testbench

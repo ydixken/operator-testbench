@@ -9,6 +9,9 @@ pack: valkey
 operator:
   # Required: the namespace the installed operator runs in.
   namespace: ""
+  # TESTBENCH_OPERATOR_VERSION: expect a patch release of the operator version
+  # the pack pins. Empty means the pack's version.
+  version: ""
 
 # Ginkgo processes. Every process gets its own scenario namespaces. One by
 # default, to go easy on a shared cluster.

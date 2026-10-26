@@ -39,7 +39,7 @@ hack/kind/                 # kind cluster configs and the image preload script
 docs/                      # user docs, rendered to a site by mkdocs (mkdocs.yml)
 .claude/skills/            # vendored skills (ponytail, humanizer, brainstorming, asd-ste100), mandatory per AGENTS.md
 .agents/skills/            # the same skills for agents that read the vendor-neutral location
-.github/workflows/         # CI (lint, test, docs), kind e2e per pull request, nightly chaos, docs deploy, release
+.github/workflows/         # CI (lint, test, docs), kind e2e and kind cluster mode per pull request, nightly chaos, docs deploy, release
 Dockerfile                 # the testbench image: compiled suite, ginkgo CLI, kubectl (distroless, no shell)
 charts/operator-testbench/ # the Helm chart: scenario namespaces, RBAC and the hook Job that runs cluster mode
 Taskfile.yml               # task help | lint | test | kind:up | kind:down | e2e | e2e:kind | image:build | chart:*
