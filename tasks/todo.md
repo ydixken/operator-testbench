@@ -1,6 +1,6 @@
 # Plans
 
-## Cluster mode
+## Cluster mode (done)
 
 Design: `docs/superpowers/specs/2026-10-23-cluster-mode-design.md` (local only).
 One pull request each, on local branches; nothing is pushed until the author has reviewed it.
@@ -25,7 +25,7 @@ One pull request each, on local branches; nothing is pushed until the author has
 - [x] Task variables `OPERATOR_NAMESPACE` and `NAMESPACES` on every e2e target.
 - [x] Unit tests and docs (`environments.md`, `reference/environment.md` in STE, `reference/pack-schema.md`, `operators/valkey.md`).
 - [x] `task lint` and `task test` green locally (2026-10-26).
-- [ ] Cluster test by the maintainer before merge.
+- [x] Cluster test by the maintainer before merge: `v0.1.0-rc.1` through the chart, 68 of 78 specs (all but chaos), no failure (2026-10-26).
 
 ### 3. `feat`: container image
 
@@ -50,11 +50,12 @@ One pull request each, on local branches; nothing is pushed until the author has
 - [x] Chart value `operator.version` (`TESTBENCH_OPERATOR_VERSION`), which the negative run needs.
 - [x] `task lint` and `task test` green locally (2026-10-26); the job itself runs only in CI.
 
-### Open questions
+### Decisions and open questions
 
-- Image and chart under `ghcr.io/ydixken/...`, chart under `charts/`?
-- Does `e2e-kind-cluster` join the merge gate?
-- Chart version equal to the testbench tag, or independent?
+- Image and chart live under `ghcr.io/ydixken/...`, the chart under `charts/`; both packages are public.
+- The chart version is the testbench tag without `v`, its appVersion the tag.
+- `v0.1.0-rc.1` (prerelease) was cut from the head of #13 before the merge; #8, #9, #11, #12 and #13 merged on 2026-10-26.
+- Open: does `e2e-kind-cluster` join the merge gate?
 
 ## Bootstrap (done)
 
