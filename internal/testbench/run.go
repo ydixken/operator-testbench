@@ -74,6 +74,10 @@ type Run struct {
 	Log       io.Writer
 	// Keep leaves the namespace and its objects in place at the end.
 	Keep bool
+	// Provided means the namespace exists before the run and outlives it.
+	Provided bool
+	// Force clears what an aborted run left in a provided namespace.
+	Force bool
 
 	goSteps map[string]GoStepFunc
 	applied []appliedObject
@@ -97,12 +101,19 @@ func NewRun(c client.Client, kubeContext string, pack *Pack, sc *Scenario, proc 
 		Command:   cmd,
 		Log:       log,
 		Keep:      env.Keep,
+		Provided:  env.Namespaces == NamespacesProvided,
+		Force:     env.Force,
 		goSteps:   steps,
 	}
 }
 
-// EnsureNamespace creates the scenario namespace, or adopts one a kept run left.
+// EnsureNamespace creates the scenario namespace, or adopts one a kept run
+// left. A provided namespace must exist and hold nothing a scenario could
+// trip over; with Force the engine clears it first.
 func (r *Run) EnsureNamespace(ctx context.Context) error {
+	if r.Provided {
+		return r.ensureProvided(ctx)
+	}
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: r.Namespace, Labels: map[string]string{
 		LabelManagedBy: FieldOwner, LabelPack: r.Pack.Name, LabelScenario: r.Scenario.Name,
 	}}}
@@ -112,6 +123,76 @@ func (r *Run) EnsureNamespace(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+
+func (r *Run) ensureProvided(ctx context.Context) error {
+	err := r.Client.Get(ctx, client.ObjectKey{Name: r.Namespace}, &corev1.Namespace{})
+	if apierrors.IsNotFound(err) {
+		return fmt.Errorf("namespace %s does not exist; with %s=%s it must be created before the run. A testbench"+
+			" chart and image from different releases name different scenarios", r.Namespace, EnvNamespaces, NamespacesProvided)
+	}
+	if err != nil {
+		return fmt.Errorf("get namespace %s: %w", r.Namespace, err)
+	}
+	left, err := r.leftovers(ctx)
+	if err != nil || len(left) == 0 {
+		return err
+	}
+	names := make([]string, 0, len(left))
+	for _, u := range left {
+		names = append(names, u.GetKind()+" "+u.GetName())
+	}
+	if !r.Force {
+		return fmt.Errorf("namespace %s is not empty: %s. An aborted run left them; rerun with %s=true to delete them",
+			r.Namespace, strings.Join(names, ", "), EnvForce)
+	}
+	r.logf("%s=true: deleting %s in namespace %s\n", EnvForce, strings.Join(names, ", "), r.Namespace)
+	steps := make([]func() error, 0, len(left))
+	for _, u := range left {
+		steps = append(steps, func() error { return r.deleteObject(ctx, u, cleanupTimeout) })
+	}
+	return RunEach(steps...)
+}
+
+// leftovers lists what already lives in the scenario namespace: objects of
+// the namespaced kinds the scenario applies, then pods, then PVCs, in the
+// order a delete has to go, owners before what they own.
+func (r *Run) leftovers(ctx context.Context) ([]*unstructured.Unstructured, error) {
+	// ponytail: manifests render with the vars known before the first step, so
+	// one that needs a Go step's var fails here; read kinds unrendered if a pack needs that.
+	var gvks []schema.GroupVersionKind
+	for _, st := range r.Scenario.Steps {
+		if st.Apply == nil {
+			continue
+		}
+		objs, err := r.manifest(st.Apply.File)
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range objs {
+			namespaced, err := r.namespaced(u)
+			if err != nil {
+				return nil, err
+			}
+			if namespaced && !slices.Contains(gvks, u.GroupVersionKind()) {
+				gvks = append(gvks, u.GroupVersionKind())
+			}
+		}
+	}
+	core := corev1.SchemeGroupVersion
+	gvks = append(gvks, core.WithKind("Pod"), core.WithKind("PersistentVolumeClaim"))
+	var found []*unstructured.Unstructured
+	for _, gvk := range gvks {
+		l := &unstructured.UnstructuredList{}
+		l.SetGroupVersionKind(gvk.GroupVersion().WithKind(gvk.Kind + "List"))
+		if err := r.Client.List(ctx, l, client.InNamespace(r.Namespace)); err != nil {
+			return nil, fmt.Errorf("list %s in %s: %w", gvk.Kind, r.Namespace, err)
+		}
+		for i := range l.Items {
+			found = append(found, &l.Items[i])
+		}
+	}
+	return found, nil
 }
 
 // Step runs one step and returns its failure, if any.
@@ -197,18 +278,27 @@ func (r *Run) namespaced(u *unstructured.Unstructured) (bool, error) {
 	return ok, nil
 }
 
-func (r *Run) apply(ctx context.Context, a *ApplyStep) error {
-	data, err := fs.ReadFile(r.Pack.FS, path.Join(r.Pack.Name, a.File))
+// manifest reads, renders and decodes one of the pack's manifest files.
+func (r *Run) manifest(file string) ([]*unstructured.Unstructured, error) {
+	data, err := fs.ReadFile(r.Pack.FS, path.Join(r.Pack.Name, file))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	rendered, err := r.render(string(data))
 	if err != nil {
-		return fmt.Errorf("%s: %w", a.File, err)
+		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	objs, err := decodeManifest([]byte(rendered))
 	if err != nil {
-		return fmt.Errorf("%s: %w", a.File, err)
+		return nil, fmt.Errorf("%s: %w", file, err)
+	}
+	return objs, nil
+}
+
+func (r *Run) apply(ctx context.Context, a *ApplyStep) error {
+	objs, err := r.manifest(a.File)
+	if err != nil {
+		return err
 	}
 	for _, u := range objs {
 		namespaced, err := r.namespaced(u)
@@ -534,7 +624,8 @@ func (r *Run) goStep(ctx context.Context, g *GoStep) error {
 }
 
 // Cleanup removes what the run applied, newest first, and then its namespace,
-// unless the run keeps its fixtures. Every step runs even after one fails.
+// unless the run keeps its fixtures or the namespace is provided. Every step
+// runs even after one fails.
 func (r *Run) Cleanup(ctx context.Context) error {
 	if r.Keep {
 		r.logf("keeping namespace %s and its %d applied objects\n", r.Namespace, len(r.applied))
@@ -549,6 +640,9 @@ func (r *Run) Cleanup(ctx context.Context) error {
 			u.SetNamespace(o.key.Namespace)
 			return r.deleteObject(ctx, u, cleanupTimeout)
 		})
+	}
+	if r.Provided {
+		return RunEach(steps...)
 	}
 	steps = append(steps, func() error {
 		ns := &unstructured.Unstructured{}

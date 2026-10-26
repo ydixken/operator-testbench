@@ -1,11 +1,12 @@
 # A persistent 3x1 cluster with appendonly survives every pod being deleted at
 # once (all pod IPs change and the operator heals stale addresses), its PVCs
 # are retained when the CR goes (reclaimPolicy Retain, the default), and a
-# second cluster with reclaimPolicy Delete loses its PVCs with the CR. Port of
-# upstream's restart and persistence tests at v0.7.1 without the event
-# counting. The delete step waits until every deleted UID is gone, so the
-# recovery asserts cannot pass on pods that were never replaced. Needs a
-# default StorageClass with a dynamic RWO provisioner (kind's standard one).
+# second cluster with reclaimPolicy Delete loses its PVCs with the CR; the
+# retained ones are deleted at the end. Port of upstream's restart and
+# persistence tests at v0.7.1 without the event counting. The delete step
+# waits until every deleted UID is gone, so the recovery asserts cannot pass
+# on pods that were never replaced. Needs a default StorageClass with a
+# dynamic RWO provisioner (kind's standard one).
 apiVersion: testbench.dev/v1alpha1
 kind: Scenario
 labels: [persistence]
@@ -145,3 +146,10 @@ steps:
     assert:
       list: {apiVersion: v1, kind: PersistentVolumeClaim, selector: valkey.io/cluster=persist-rpd}
       count: 0
+
+  # Retained PVCs used to go with the namespace. A provided namespace stays,
+  # so the scenario deletes them itself and the next run starts empty.
+  - name: delete the retained PVCs
+    timeout: 2m
+    delete:
+      list: {apiVersion: v1, kind: PersistentVolumeClaim, selector: valkey.io/cluster=persist}

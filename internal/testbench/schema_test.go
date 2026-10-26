@@ -242,6 +242,7 @@ func TestPackValidation(t *testing.T) {
 		{"version with slash", "version: v0.7.1", "version: refs/tags/v0.7.1", "single token"},
 		{"bad namespace", "namespace: testbench-valkey-system", "namespace: Valkey_System", "operator.namespace"},
 		{"bad selector", "selector: app.kubernetes.io/name=valkey-operator,control-plane=controller-manager", "selector: 'a==='", "operator.selector"},
+		{"bad container", "  selector: app", "  container: Manager\n  selector: app", "operator.container"},
 		{"http crd", "- https://raw.githubusercontent.com", "- http://raw.githubusercontent.com", "https URL"},
 		{"crd bad template", "{{ .Version }}/config", "{{ .Version /config", "install.crds[0]"},
 		{"helm repo not https", "repo: https://valkey.io/valkey-helm", "repo: oci://ghcr.io/x", "install.helm.repo"},

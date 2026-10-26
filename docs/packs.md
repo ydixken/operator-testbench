@@ -50,6 +50,7 @@ Pick a name that no production install uses.
 
 `operator.selector` matches the controller pods in that namespace.
 The engine waits for one of them to be Ready after the install, and reads their logs when a step fails.
+It also reads the operator version from the image tag of their controller container: `operator.container` names it, and a pod with one container needs no name.
 
 ## CRDs before the chart
 

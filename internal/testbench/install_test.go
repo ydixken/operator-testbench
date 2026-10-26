@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -33,9 +34,15 @@ import (
 
 const operatorNS = "testbench-valkey-system"
 
-func controllerPod(name string, ready bool) *corev1.Pod {
+func controllerPod(name string, ready bool, images ...string) *corev1.Pod {
 	p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: operatorNS,
 		Labels: map[string]string{"app.kubernetes.io/name": "valkey-operator", "control-plane": "controller-manager"}}}
+	if len(images) == 0 {
+		images = []string{"ghcr.io/valkey-io/valkey-operator:v0.7.1"}
+	}
+	for i, image := range images {
+		p.Spec.Containers = append(p.Spec.Containers, corev1.Container{Name: fmt.Sprintf("c%d", i), Image: image})
+	}
 	status := corev1.ConditionFalse
 	if ready {
 		status = corev1.ConditionTrue
@@ -231,6 +238,51 @@ func TestWaitReady(t *testing.T) {
 	inst, _, _ = newInstaller(t, "", []string{"true"}, controllerPod("ctl", false), controllerPod("ctl-2", true))
 	if err := inst.WaitReady(ctx); err != nil {
 		t.Errorf("WaitReady with a Ready pod = %v", err)
+	}
+}
+
+func TestImageTag(t *testing.T) {
+	for image, want := range map[string]string{
+		"ghcr.io/valkey-io/valkey-operator:v0.7.1":                  "v0.7.1",
+		"registry.local:5000/valkey-operator:0.7.1":                 "0.7.1",
+		"registry.local:5000/valkey-operator":                       "",
+		"valkey-operator:v0.7.1@sha256:0123456789abcdef":            "v0.7.1",
+		"ghcr.io/valkey-io/valkey-operator@sha256:0123456789abcdef": "",
+	} {
+		if got := imageTag(image); got != want {
+			t.Errorf("imageTag(%s) = %q, want %q", image, got, want)
+		}
+	}
+}
+
+func TestWaitReadyChecksTheVersion(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name      string
+		container string
+		pods      []client.Object
+		want      string // empty: passes
+	}{
+		{"match without v", "", []client.Object{controllerPod("ctl", true, "r.io/op:0.7.1")}, ""},
+		{"unready pod ignored", "", []client.Object{controllerPod("ctl", true), controllerPod("old", false, "r.io/op:v0.6.0")}, ""},
+		{"mismatch", "", []client.Object{controllerPod("ctl", true, "r.io/op:v0.7.0")}, "ctl runs v0.7.0"},
+		{"mixed tags", "", []client.Object{controllerPod("ctl", true), controllerPod("old", true, "r.io/op:v0.6.0")}, "old runs v0.6.0"},
+		{"digest only", "", []client.Object{controllerPod("ctl", true, "r.io/op@sha256:00")}, "without a tag"},
+		{"two containers", "", []client.Object{controllerPod("ctl", true, "r.io/op:v0.7.1", "r.io/proxy:v1")}, "name the controller"},
+		{"named container", "c1", []client.Object{controllerPod("ctl", true, "r.io/proxy:v1", "r.io/op:v0.7.1")}, ""},
+		{"named container missing", "manager", []client.Object{controllerPod("ctl", true)}, "no container manager"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst, _, _ := newInstaller(t, "", []string{"true"}, tc.pods...)
+			inst.Pack.Spec.Operator.Container = tc.container
+			err := inst.WaitReady(ctx)
+			switch {
+			case tc.want == "" && err != nil:
+				t.Errorf("WaitReady = %v", err)
+			case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
+				t.Errorf("WaitReady = %v, want an error containing %q", err, tc.want)
+			}
+		})
 	}
 }
 

@@ -17,12 +17,15 @@ One pull request each, on local branches; nothing is pushed until the author has
 
 ### 2. `feat(testbench)`: cluster mode
 
-- [ ] `TESTBENCH_OPERATOR_NAMESPACE` and `TESTBENCH_NAMESPACES=managed|provided` in `ParseEnv`, rejected values quoted.
-- [ ] Optional pack field `operator.container`; version check after `WaitReady` in every mode: tag parsing (digest, registry port, `v` prefix), polling until all Ready pods run the expected tag, at once on no tag or a missing container.
-- [ ] `EnsureNamespace` with `provided`: namespace MUST exist and be empty of pods, PVCs and the scenario's kinds; `TESTBENCH_FORCE=true` clears them first.
-- [ ] `Cleanup` keeps a provided namespace; teardown skips `DeleteLabelledNamespaces`.
-- [ ] `persistence-restart.yaml` deletes its retained PVCs in a final step.
-- [ ] Unit tests and docs (`environments.md`, `reference/environment.md` in STE, `reference/pack-schema.md`, `operators/valkey.md`).
+- [x] `TESTBENCH_OPERATOR_NAMESPACE` and `TESTBENCH_NAMESPACES=managed|provided` in `ParseEnv`, rejected values quoted.
+- [x] Optional pack field `operator.container`; version check inside `WaitReady`, in every mode: tag parsing (digest, registry port, `v` prefix), polling until all Ready pods run the expected tag, at once on no tag or a missing container.
+- [x] `EnsureNamespace` with `provided`: namespace MUST exist and be empty of pods, PVCs and the scenario's kinds; `TESTBENCH_FORCE=true` clears them first.
+- [x] `Cleanup` keeps a provided namespace; teardown skips `DeleteLabelledNamespaces`.
+- [x] `persistence-restart.yaml` deletes its retained PVCs in a final step.
+- [x] Task variables `OPERATOR_NAMESPACE` and `NAMESPACES` on every e2e target.
+- [x] Unit tests and docs (`environments.md`, `reference/environment.md` in STE, `reference/pack-schema.md`, `operators/valkey.md`).
+- [x] `task lint` and `task test` green locally (2026-10-26).
+- [ ] Cluster test by the maintainer before merge.
 
 ### 3. `feat`: container image
 

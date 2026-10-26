@@ -98,4 +98,9 @@ func TestLoadSuiteSkipsWithoutContext(t *testing.T) {
 	if err != nil || s == nil || s.Pack.Name != "valkey" || s.Env.Install != testbench.InstallHelm {
 		t.Errorf("loadSuite for valkey = %+v, %v", s, err)
 	}
+	s, err = loadSuite(getenv(map[string]string{testbench.EnvContext: "kind-testbench", testbench.EnvOperator: "valkey",
+		testbench.EnvOperatorNamespace: "valkey-operator-system"}))
+	if err != nil || s.Pack.Spec.Operator.Namespace != "valkey-operator-system" {
+		t.Errorf("loadSuite with %s: namespace %q, %v", testbench.EnvOperatorNamespace, s.Pack.Spec.Operator.Namespace, err)
+	}
 }

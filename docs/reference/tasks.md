@@ -16,7 +16,7 @@ The cluster-touching targets read the current kubectl context, show it, and pass
 | `task e2e:chaos:unattended OPERATOR=<pack> EXPECT_CONTEXT=<context>` | no | `e2e:chaos` without the prompt. |
 | `task e2e:kind OPERATOR=<pack>` | no | `kind:up`, then the pack against `kind-testbench` through the ginkgo CLI with `PROCS` processes (default `2`). `LABELS` defaults to `!chaos`. |
 
-Variables every e2e target accepts: `FOCUS` (Ginkgo focus regex), `TIMEOUT` (Go duration for the whole run, default `1h`), `VERSION`, `INSTALL` (`helm` or `skip`), `KEEP`, `FORCE`.
+Variables every e2e target accepts: `FOCUS` (Ginkgo focus regex), `TIMEOUT` (Go duration for the whole run, default `1h`), `VERSION`, `INSTALL` (`helm` or `skip`), `OPERATOR_NAMESPACE`, `NAMESPACES` (`managed` or `provided`), `KEEP`, `FORCE`.
 `task e2e:kind` and `task e2e:unattended` also accept `LABELS`.
 
 `task --yes` MUST NOT be used.

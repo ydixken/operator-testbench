@@ -22,6 +22,7 @@ An unknown field is an error.
 | `version` | string | yes | The default operator version. One token, without spaces or `/`. `TESTBENCH_OPERATOR_VERSION` replaces it. Templates read it as `{{ .Version }}`. |
 | `namespace` | string | yes | A DNS label. The engine creates this namespace and installs the operator in it. |
 | `selector` | string | yes | A label selector for the controller pods in `namespace`. The engine waits for a Ready pod with it, and reads logs with it. |
+| `container` | string | no | A DNS label. The name of the controller container. The engine reads the operator version from the image tag of this container. If you do not set it, the pod must have one container. |
 
 ## install
 

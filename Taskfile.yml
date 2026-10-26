@@ -75,7 +75,8 @@ tasks:
       Run the OPERATOR pack's scenarios against the CURRENT kubectl context (a
       real cluster), one Ginkgo process, after confirming the context. Chaos
       scenarios are excluded; use e2e:chaos. Vars: FOCUS (Ginkgo focus regex),
-      TIMEOUT (default 1h), VERSION, INSTALL (helm|skip), KEEP, FORCE.
+      TIMEOUT (default 1h), VERSION, INSTALL (helm|skip), KEEP, FORCE,
+      OPERATOR_NAMESPACE, NAMESPACES (managed|provided).
     vars:
       KUBE_CONTEXT:
         sh: kubectl config current-context
@@ -91,7 +92,8 @@ tasks:
     cmds:
       - task: e2e:run
         vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: '!chaos', FOCUS: '{{.FOCUS}}',
-               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}',
+               OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}', NAMESPACES: '{{.NAMESPACES}}'}
 
   e2e:focus:
     desc: >-
@@ -114,7 +116,8 @@ tasks:
       - task: e2e:run
         vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: '!chaos', FOCUS: '{{.FOCUS}}',
                TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP | default "true"}}',
-               FORCE: '{{.FORCE}}'}
+               FORCE: '{{.FORCE}}',
+               OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}', NAMESPACES: '{{.NAMESPACES}}'}
 
   e2e:unattended:
     desc: >-
@@ -138,7 +141,8 @@ tasks:
       - task: e2e:run
         vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: '{{.LABELS | default "!chaos"}}',
                FOCUS: '{{.FOCUS}}', TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}',
-               KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+               KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}',
+               OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}', NAMESPACES: '{{.NAMESPACES}}'}
 
   e2e:chaos:
     desc: >-
@@ -155,7 +159,8 @@ tasks:
     cmds:
       - task: e2e:run
         vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: 'chaos', FOCUS: '{{.FOCUS}}',
-               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}',
+               OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}', NAMESPACES: '{{.NAMESPACES}}'}
 
   e2e:chaos:unattended:
     desc: e2e:chaos without the prompt; EXPECT_CONTEXT is required, as for e2e:unattended.
@@ -168,7 +173,8 @@ tasks:
     cmds:
       - task: e2e:run
         vars: {OPERATOR: '{{.OPERATOR}}', KUBE_CONTEXT: '{{.KUBE_CONTEXT}}', LABELS: 'chaos', FOCUS: '{{.FOCUS}}',
-               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+               TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}', INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}',
+               OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}', NAMESPACES: '{{.NAMESPACES}}'}
 
   e2e:kind:
     desc: >-
@@ -186,7 +192,8 @@ tasks:
       - task: e2e:run:parallel
         vars: {OPERATOR: '{{.OPERATOR}}', EXPECT_CONTEXT: kind-testbench, LABELS: '{{.LABELS | default "!chaos"}}',
                PROCS: '{{.PROCS | default "2"}}', FOCUS: '{{.FOCUS}}', TIMEOUT: '{{.TIMEOUT}}', VERSION: '{{.VERSION}}',
-               INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}'}
+               INSTALL: '{{.INSTALL}}', KEEP: '{{.KEEP}}', FORCE: '{{.FORCE}}',
+               OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}', NAMESPACES: '{{.NAMESPACES}}'}
 
   e2e:run:
     internal: true
@@ -199,6 +206,8 @@ tasks:
       TESTBENCH_OPERATOR_INSTALL: '{{.INSTALL | default "helm"}}'
       TESTBENCH_KEEP: '{{.KEEP | default "false"}}'
       TESTBENCH_FORCE: '{{.FORCE | default "false"}}'
+      TESTBENCH_OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}'
+      TESTBENCH_NAMESPACES: '{{.NAMESPACES | default "managed"}}'
     cmds:
       # TESTBENCH_CONTEXT binds the confirmed context; set inline because an
       # exported value beats a Taskfile env: block. -ginkgo.timeout must match
@@ -223,6 +232,8 @@ tasks:
       TESTBENCH_OPERATOR_INSTALL: '{{.INSTALL | default "helm"}}'
       TESTBENCH_KEEP: '{{.KEEP | default "false"}}'
       TESTBENCH_FORCE: '{{.FORCE | default "false"}}'
+      TESTBENCH_OPERATOR_NAMESPACE: '{{.OPERATOR_NAMESPACE}}'
+      TESTBENCH_NAMESPACES: '{{.NAMESPACES | default "managed"}}'
     cmds:
       # go test cannot run Ginkgo in parallel, so go run builds the CLI at the
       # version go.mod pins. Reports land in reports/ (gitignored).

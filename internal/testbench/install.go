@@ -196,8 +196,11 @@ func (i *Installer) HelmUninstall(ctx context.Context) error {
 	return err
 }
 
-// WaitReady waits until a pod matching the pack's controller selector is Ready.
-// It is the one check shared by the install path and TESTBENCH_OPERATOR_INSTALL=skip.
+// WaitReady waits until a pod matching the pack's controller selector is Ready
+// and every Ready one runs the expected operator version. It is the one check
+// shared by the install path and TESTBENCH_OPERATOR_INSTALL=skip, so a skipped
+// install proves which version it tests and a Helm install proves what it
+// installed. It polls, because a rollout can still be replacing old pods.
 func (i *Installer) WaitReady(ctx context.Context) error {
 	sel, err := labels.Parse(i.Pack.Spec.Operator.Selector)
 	if err != nil {
@@ -208,22 +211,88 @@ func (i *Installer) WaitReady(ctx context.Context) error {
 		timeout = readyTimeout
 	}
 	ns := i.Pack.Spec.Operator.Namespace
-	return poll(ctx, timeout, func(ctx context.Context) error {
+	// fatal ends the wait at once: waiting cannot fix a missing container or tag.
+	var fatal error
+	err = poll(ctx, timeout, func(ctx context.Context) error {
 		var pods corev1.PodList
 		opts := []client.ListOption{client.InNamespace(ns), client.MatchingLabelsSelector{Selector: sel}}
 		if err := i.Client.List(ctx, &pods, opts...); err != nil {
 			return err
 		}
+		var ready int
+		var wrong []string
 		for _, p := range pods.Items {
-			for _, c := range p.Status.Conditions {
-				if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
-					return nil
-				}
+			if !podReady(&p) {
+				continue
+			}
+			ready++
+			tag, err := i.controllerTag(&p)
+			if err != nil {
+				fatal = err
+				return nil
+			}
+			if strings.TrimPrefix(tag, "v") != strings.TrimPrefix(i.Pack.Version, "v") {
+				wrong = append(wrong, p.Name+" runs "+tag)
 			}
 		}
-		return fmt.Errorf("no Ready pod matches %s in namespace %s (%d pods); with %s=%s the operator must already run there",
-			i.Pack.Spec.Operator.Selector, ns, len(pods.Items), EnvInstall, InstallSkip)
+		switch {
+		case ready == 0:
+			return fmt.Errorf("no Ready pod matches %s in namespace %s (%d pods); with %s=%s the operator must"+
+				" already run there", i.Pack.Spec.Operator.Selector, ns, len(pods.Items), EnvInstall, InstallSkip)
+		case len(wrong) > 0:
+			return fmt.Errorf("the testbench expects operator version %s, but %s. The testbench release must match the"+
+				" operator release: use the release whose pack pins the running version, or set %s for a patch release",
+				i.Pack.Version, strings.Join(wrong, ", "), EnvVersion)
+		}
+		return nil
 	})
+	if fatal != nil {
+		return fatal
+	}
+	return err
+}
+
+func podReady(p *corev1.Pod) bool {
+	for _, c := range p.Status.Conditions {
+		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+// controllerTag reads the image tag of the controller container: the one
+// operator.container names, or the pod's only container.
+func (i *Installer) controllerTag(p *corev1.Pod) (string, error) {
+	name := i.Pack.Spec.Operator.Container
+	var image string
+	switch {
+	case name == "" && len(p.Spec.Containers) == 1:
+		image = p.Spec.Containers[0].Image
+	case name == "":
+		return "", fmt.Errorf("pod %s has %d containers; name the controller in the pack's operator.container",
+			p.Name, len(p.Spec.Containers))
+	default:
+		idx := slices.IndexFunc(p.Spec.Containers, func(c corev1.Container) bool { return c.Name == name })
+		if idx < 0 {
+			return "", fmt.Errorf("pod %s has no container %s (operator.container)", p.Name, name)
+		}
+		image = p.Spec.Containers[idx].Image
+	}
+	tag := imageTag(image)
+	if tag == "" {
+		return "", fmt.Errorf("pod %s runs image %s without a tag, so its version is unknown; deploy the operator by tag",
+			p.Name, image)
+	}
+	return tag, nil
+}
+
+// imageTag is the tag of an image reference without its digest: the text
+// after the last ':' behind the last '/', so a registry port is never a tag.
+func imageTag(image string) string {
+	image, _, _ = strings.Cut(image, "@")
+	_, tag, _ := strings.Cut(image[strings.LastIndex(image, "/")+1:], ":")
+	return tag
 }
 
 // Install is the whole install path: the lock, the CRDs, the namespace, the
