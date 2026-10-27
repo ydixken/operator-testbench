@@ -1,6 +1,6 @@
 # Valkey
 
-The pack for [valkey-operator](https://github.com/valkey-io/valkey-operator), pinned to operator `v0.7.1` and chart `0.7.0`.
+The pack for [valkey-operator](https://github.com/valkey-io/valkey-operator), pinned to operator `v0.8.0` and chart `0.8.0`.
 The operator's v1alpha1 API changed in nearly every 0.x minor, so the pack, the chart version and the scenarios move together in one pull request; `TESTBENCH_OPERATOR_VERSION` is a patch-level override.
 
 ## What the pack installs
@@ -39,5 +39,5 @@ The failover scenario addresses those pods as `{{ .Vars.primary }}` and `{{ .Var
 
 ## Not covered yet
 
-TLS with cert-manager, users and live ACL updates, a rolling image upgrade, read-only root filesystems under a restricted Pod Security Standard, topology spread, events, admission rejections, and a continuous writer during a failover.
+TLS with cert-manager, users and live ACL updates, custom pod metadata and ServiceAccounts (v0.8), a rolling image upgrade, read-only root filesystems under a restricted Pod Security Standard, topology spread, events, admission rejections, and a continuous writer during a failover.
 Each needs either a cluster-wide dependency or a step kind the engine does not have yet.
