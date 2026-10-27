@@ -174,6 +174,11 @@ func (p *Pack) loadScenarios(known map[string]bool, env *CELEnv) error {
 	}
 	var errs []error
 	for _, e := range entries {
+		// Hidden entries are not scenarios: a mounted ConfigMap carries ..data
+		// and a timestamped directory, a checkout may carry .gitkeep.
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
 		file := path.Join(dir, e.Name())
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
 			errs = append(errs, fmt.Errorf("%s: only *.yaml scenario files belong here", file))

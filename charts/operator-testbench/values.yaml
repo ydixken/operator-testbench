@@ -13,6 +13,19 @@ operator:
   # the pack pins. Empty means the pack's version.
   version: ""
 
+# A pack the image does not embed. packDir sets TESTBENCH_PACK_DIR: a
+# directory laid out like operators/ (<packDir>/<pack>/operator.yaml,
+# manifests/, scenarios/) whose packs replace the embedded ones. Bring the
+# files in with extraVolumes and extraVolumeMounts, from any source. scenarios
+# lists the pack's scenario names and replaces files/scenarios.yaml, so the
+# scenario namespaces match the pack; it is required with packDir.
+packDir: ""
+scenarios: []
+
+# Added to the Job's pod and its container as they are.
+extraVolumes: []
+extraVolumeMounts: []
+
 # Ginkgo processes. Every process gets its own scenario namespaces. One by
 # default, to go easy on a shared cluster.
 procs: 1

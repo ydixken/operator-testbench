@@ -69,6 +69,10 @@ spec:
             # kubectl writes its discovery cache under HOME.
             - name: HOME
               value: /tmp
+            {{- with .Values.packDir }}
+            - name: TESTBENCH_PACK_DIR
+              value: {{ . | quote }}
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -83,11 +87,17 @@ spec:
               mountPath: /reports
             - name: tmp
               mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
         - name: reports
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

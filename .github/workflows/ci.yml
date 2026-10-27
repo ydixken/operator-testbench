@@ -52,6 +52,9 @@ jobs:
           helm template testbench charts/operator-testbench -n operator-testbench \
             --set operator.namespace=valkey-operator-system --set procs=2 \
             | yamllint -d relaxed --no-warnings -
+          helm template testbench charts/operator-testbench -n operator-testbench \
+            --set operator.namespace=valkey-operator-system -f charts/operator-testbench/ci/pack-dir-values.yaml \
+            | yamllint -d relaxed --no-warnings -
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

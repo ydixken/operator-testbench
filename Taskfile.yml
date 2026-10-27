@@ -46,6 +46,17 @@ tasks:
     cmds:
       - go test ./... -skip '^TestE2E$' -race -covermode atomic -coverprofile cover.out
 
+  pack:validate:
+    desc: >-
+      Validate the packs in PACK_DIR (laid out like operators/) without a
+      cluster: the run's loader, strict decoding, and the registered Go steps.
+    requires: {vars: [PACK_DIR]}
+    cmds:
+      # go test runs in the package directory, so the path is made absolute first.
+      - >-
+        TESTBENCH_PACK_DIR="$(cd '{{.PACK_DIR}}' && pwd)"
+        go test ./test/e2e -skip '^TestE2E$' -run '^TestPackDir$' -count=1 -v
+
   chart:generate:
     desc: Write the chart's scenario list (charts/operator-testbench/files/scenarios.yaml) from the embedded packs.
     cmds:
@@ -60,6 +71,10 @@ tasks:
       - >-
         helm template testbench charts/operator-testbench -n operator-testbench
         --set operator.namespace=valkey-operator-system --set procs=2
+        | yamllint -d relaxed --no-warnings -
+      - >-
+        helm template testbench charts/operator-testbench -n operator-testbench
+        --set operator.namespace=valkey-operator-system -f charts/operator-testbench/ci/pack-dir-values.yaml
         | yamllint -d relaxed --no-warnings -
 
   image:build:

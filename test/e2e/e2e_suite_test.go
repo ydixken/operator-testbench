@@ -24,6 +24,7 @@ package e2e
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"testing"
 	"time"
@@ -61,7 +62,7 @@ func loadSuite(getenv func(string) string) (*suiteState, error) {
 	if err != nil {
 		return nil, err
 	}
-	pack, err := testbench.LoadPack(operators.FS, env.Operator, env.Version, goStepNames())
+	pack, err := testbench.LoadPack(packFS(env), env.Operator, env.Version, goStepNames())
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +70,15 @@ func loadSuite(getenv func(string) string) (*suiteState, error) {
 		pack.Spec.Operator.Namespace = env.OperatorNamespace
 	}
 	return &suiteState{Env: env, Pack: pack}, nil
+}
+
+// packFS is where the packs come from: the embedded ones, or the directory
+// TESTBENCH_PACK_DIR names, which replaces them.
+func packFS(env testbench.Env) fs.FS {
+	if env.PackDir != "" {
+		return os.DirFS(env.PackDir)
+	}
+	return operators.FS
 }
 
 var (

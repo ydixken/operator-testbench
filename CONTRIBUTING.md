@@ -81,6 +81,7 @@ A run reads these environment variables, each shown with the default it takes wh
 - `TESTBENCH_OPERATOR_INSTALL` (`helm`) set to `skip` uses an operator that is already installed on the context, and only waits for a pod matching the pack's selector in the operator namespace, running the pack's version.
 - `TESTBENCH_OPERATOR_NAMESPACE` (the pack's `operator.namespace`) is the operator namespace; with `skip`, where the installed operator runs.
 - `TESTBENCH_NAMESPACES` (`managed`) set to `provided` means the scenario namespaces exist before the run: the engine never creates or deletes them, and refuses one that is not empty unless `TESTBENCH_FORCE=true` clears it.
+- `TESTBENCH_PACK_DIR` (unset) names an absolute directory laid out like `operators/`; its packs replace the embedded ones, and `task pack:validate PACK_DIR=<dir>` checks it without a cluster.
 - `TESTBENCH_KEEP` (unset) keeps the scenario namespaces when `true`, for iteration; the operator is uninstalled regardless, and the next run installs it again before it touches the kept namespaces.
   A kept namespace that holds objects with finalizers deletes only while the operator runs.
 - `TESTBENCH_FORCE` (unset) takes over the Helm release a crashed run left behind when `true`, and replaces CRDs another install owns.
