@@ -41,7 +41,8 @@ Helm waits for the hook, and its `--timeout` (default 5 minutes) MUST be longer 
 | `namespaceLabels` | `{}` | Added to every scenario namespace, for example Pod Security or a mesh opt-out. |
 | `podAnnotations`, `podLabels`, `resources`, `nodeSelector`, `tolerations` | empty | The Job's pod. |
 | `packs.<pack>.rules` | shipped per pack | The scenario role. |
-| `externalPack.configMap`, `externalPack.files` | empty | Run a pack from a ConfigMap instead of the embedded one; see below. |
+| `packDir`, `scenarios` | empty | Run a pack the image does not embed; see below. |
+| `extraVolumes`, `extraVolumeMounts` | empty | Added to the Job's pod and container as they are, for example to bring in a pack. |
 
 ## Permissions
 
@@ -121,58 +122,54 @@ Argo CD runs the Job as a PostSync hook on every sync.
 The image embeds its packs, and they stay the default.
 A pack kept in your own repository replaces the embedded pack of the same name for one release, as a whole: it does not merge scenarios.
 
-Put the pack's files into a ConfigMap in the release namespace, in the same sync as the chart.
-A ConfigMap key cannot hold a `/`, so the key is the file's path inside the pack with `/` replaced by `__`:
+The chart does not care where the pack comes from.
+Mount it with `extraVolumes` and `extraVolumeMounts` so that it lies like `operators/` in this repository (`<packDir>/<pack>/operator.yaml`, `manifests/`, `scenarios/`), set `packDir`, and list the pack's scenario names in `scenarios`, from which the chart creates the scenario namespaces.
 
-```yaml
-# kustomization.yaml
-configMapGenerator:
-  - name: my-pack
-    namespace: operator-testbench
-    options: {disableNameSuffixHash: true}
-    files:
-      - operator.yaml=valkey/operator.yaml
-      - manifests__cluster.yaml=valkey/manifests/cluster.yaml
-      - scenarios__smoke.yaml=valkey/scenarios/smoke.yaml
-```
-
-Then list the same paths in the chart's values:
+A ConfigMap is one way. Its keys cannot hold a `/`, so `items` give each key its path:
 
 ```yaml
 pack: valkey
-externalPack:
-  configMap: my-pack
-  files:
-    - operator.yaml
-    - manifests/cluster.yaml
-    - scenarios/smoke.yaml
+packDir: /packs
+scenarios: [smoke]
+extraVolumes:
+  - name: pack
+    configMap:
+      name: my-pack
+      items:
+        - {key: operator.yaml, path: operator.yaml}
+        - {key: cluster.yaml, path: manifests/cluster.yaml}
+        - {key: smoke.yaml, path: scenarios/smoke.yaml}
+extraVolumeMounts:
+  - {name: pack, mountPath: /packs/valkey, readOnly: true}
 ```
 
-The chart mounts each key at its path under `/packs/<pack>` and sets `TESTBENCH_PACK_DIR=/packs`.
-The scenario namespaces come from the `scenarios/` entries, so the list cannot drift from the namespaces.
-`helm template` fails when `operator.yaml` or every `scenarios/` entry is missing, or when a path is not lower case or is more than one directory deep.
-Scenarios may use every step kind and the Go steps the image registers.
-The pack's `operator.version` is the version the run expects, so a patch release of the operator needs only a change to your pack.
+A git-sync sidecar into an `emptyDir`, or an image volume, works the same way.
+Keep one volume per pack: a second volume mounted inside a ConfigMap volume, for example on `scenarios/`, needs a mount point in a read-only directory, which the container runtime typically cannot create.
 
-Check a pack before it reaches the cluster: `task pack:validate PACK_DIR=<dir>` in a checkout of this repository, or with the image alone:
+Things to know:
+
+- **A new run on a pack change.** A change to a volume source is not a change to the release, so a GitOps tool does not upgrade it, and the hook does not run.
+  Put a revision or a checksum of the pack into `podAnnotations`, for example from a key that Flux reads with `valuesFrom`, so that a pack change is a values change.
+- **Missing files.** A ConfigMap, or a key that `items` names, that does not exist keeps the Job's pod in `ContainerCreating` until `activeDeadlineSeconds`.
+  Create the volume source in the same sync as the chart, and validate the pack first.
+- **Permissions.** `packs.<pack>.rules` must cover what your scenarios do; the chart ships rules only for the embedded packs.
+- **Go steps.** Scenarios may use every step kind and the Go steps the image registers. A new Go step needs a testbench release.
+- **Versions.** The pack's `operator.version` is the version the run expects, so a patch release of the operator needs only a change to your pack.
+- **Trust.** Whoever can change the pack decides what the Job does in the scenario namespaces: it runs `exec` and applies objects with the scenario role there. Review the pack like the chart values.
+
+Validate a pack without a cluster.
+In a checkout of this repository: `task pack:validate PACK_DIR=<dir>`, where `<dir>` holds `<pack>/operator.yaml`.
+With the image alone:
 
 ```sh
 docker run --rm -v "$PWD/packs:/packs:ro" -e TESTBENCH_PACK_DIR=/packs \
   --entrypoint /testbench/e2e.test ghcr.io/ydixken/operator-testbench:<version> -test.run '^TestPackDir$' -test.v
 ```
 
-`<dir>` holds `<pack>/operator.yaml`, like `operators/` in this repository.
-
-Whoever can change the ConfigMap decides what the Job does in the scenario namespaces: it runs `exec` and applies objects with the scenario role there.
-Give the ConfigMap the same review as the chart values.
-
-A ConfigMap or a listed key that is missing keeps the Job's pod in `ContainerCreating` until `activeDeadlineSeconds`.
-Keep both in one sync, and validate the pack first.
-
 ## How the chart is tested
 
 The workflow `e2e-kind-cluster.yml` does on every pull request what a deploying repository does: it installs valkey-operator from its upstream chart, then this chart from the working tree with an image built in the job, and runs the smoke scenarios.
-A run from an external pack in a ConfigMap must show its only scenario, `external-smoke`, in the log.
+A run with `packDir`, its pack brought in through `extraVolumes` from a ConfigMap, must show its only scenario, `external-smoke`, in the log.
 A second run with `operator.version` set to a version the cluster does not run MUST fail.
 A pull request merges only when the job is green.
 

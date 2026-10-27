@@ -87,7 +87,7 @@ Bumps of the operator and the chart are labelled `dependencies/major` and never 
 
 `TESTBENCH_PACK_DIR` names a directory laid out like `operators/`, and its packs replace the embedded ones for the run.
 `task pack:validate PACK_DIR=<dir>` checks such a directory without a cluster, with the same loader and Go steps a run uses.
-In a cluster the chart takes the pack from a ConfigMap; see [your own pack](deploying.md#your-own-pack).
+In a cluster the chart mounts the pack from any volume source; see [your own pack](deploying.md#your-own-pack).
 
 ## Adding a pack
 

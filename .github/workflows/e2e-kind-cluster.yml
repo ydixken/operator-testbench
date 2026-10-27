@@ -5,7 +5,7 @@ name: E2E kind cluster mode
 # chart from the working tree with an image built here. Smoke scenarios only,
 # because e2e-kind already runs the full suite. A second run that expects
 # another operator version MUST fail, which proves the version check. A run
-# from an external pack in a ConfigMap proves that the pack replaces the
+# with packDir proves that a pack brought in through extraVolumes replaces the
 # embedded one: its only scenario, external-smoke, exists nowhere else. The job
 # id e2e-kind-cluster is part of the merge gate, so no paths: filter here.
 
@@ -62,18 +62,16 @@ jobs:
       - name: Testbench log
         if: always()
         run: kubectl logs -n operator-testbench job/testbench-operator-testbench --tail=-1 || true
-      - name: Run an external pack from a ConfigMap
-        # The keys are the pack paths with "/" replaced by "__", as the chart's
-        # externalPack.files expects. external-smoke is cluster-ready renamed.
+      - name: Run a pack from packDir, brought in through extraVolumes
+        # ci/pack-dir-values.yaml mounts this ConfigMap with items into the
+        # operators/ layout. external-smoke is cluster-ready renamed.
         run: |
           kubectl create configmap testbench-pack -n operator-testbench \
             --from-file=operator.yaml=operators/valkey/operator.yaml \
-            --from-file=manifests__cluster-3x1.yaml=operators/valkey/manifests/cluster-3x1.yaml \
-            --from-file=scenarios__external-smoke.yaml=operators/valkey/scenarios/cluster-ready.yaml
+            --from-file=cluster-3x1.yaml=operators/valkey/manifests/cluster-3x1.yaml \
+            --from-file=external-smoke.yaml=operators/valkey/scenarios/cluster-ready.yaml
           helm upgrade testbench charts/operator-testbench -n operator-testbench --reuse-values \
-            --set externalPack.configMap=testbench-pack \
-            --set 'externalPack.files={operator.yaml,manifests/cluster-3x1.yaml,scenarios/external-smoke.yaml}' \
-            --set labelFilter=smoke --timeout 30m
+            -f charts/operator-testbench/ci/pack-dir-values.yaml --set labelFilter=smoke --timeout 30m
           kubectl logs -n operator-testbench job/testbench-operator-testbench --tail=-1 | tee external.log | tail -5
           grep -F "external-smoke" external.log
       - name: A run that expects another operator version fails

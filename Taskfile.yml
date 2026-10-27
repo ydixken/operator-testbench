@@ -74,8 +74,7 @@ tasks:
         | yamllint -d relaxed --no-warnings -
       - >-
         helm template testbench charts/operator-testbench -n operator-testbench
-        --set operator.namespace=valkey-operator-system --set externalPack.configMap=testbench-pack
-        --set 'externalPack.files={operator.yaml,manifests/cluster-3x1.yaml,scenarios/external-smoke.yaml}'
+        --set operator.namespace=valkey-operator-system -f charts/operator-testbench/ci/pack-dir-values.yaml
         | yamllint -d relaxed --no-warnings -
 
   image:build:

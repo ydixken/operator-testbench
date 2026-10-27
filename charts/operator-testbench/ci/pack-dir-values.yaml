@@ -1,0 +1,15 @@
+# A pack read from packDir instead of the embedded one, as chart:lint renders
+# it and e2e-kind-cluster installs it. The ConfigMap testbench-pack holds the
+# files; items give them the operators/ layout under /packs/valkey.
+packDir: /packs
+scenarios: [external-smoke]
+extraVolumes:
+  - name: pack
+    configMap:
+      name: testbench-pack
+      items:
+        - {key: operator.yaml, path: operator.yaml}
+        - {key: cluster-3x1.yaml, path: manifests/cluster-3x1.yaml}
+        - {key: external-smoke.yaml, path: scenarios/external-smoke.yaml}
+extraVolumeMounts:
+  - {name: pack, mountPath: /packs/valkey, readOnly: true}
