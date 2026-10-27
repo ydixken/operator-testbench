@@ -23,7 +23,7 @@ apiVersion: testbench.dev/v1alpha1
 kind: OperatorPack
 operator:
   # renovate: datasource=github-releases depName=valkey-io/valkey-operator
-  version: v0.7.1
+  version: v0.8.0
   namespace: testbench-valkey-system
   selector: app.kubernetes.io/name=valkey-operator,control-plane=controller-manager
 install:
@@ -33,7 +33,7 @@ install:
     repo: https://valkey.io/valkey-helm
     chart: valkey-operator
     # renovate: datasource=helm depName=valkey-operator registryUrl=https://valkey.io/valkey-helm
-    version: 0.7.0
+    version: 0.8.0
     release: testbench-valkey-operator
     set:
       image.tag: "{{ .Version }}"
