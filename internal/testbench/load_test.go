@@ -17,6 +17,8 @@ limitations under the License.
 package testbench
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -89,6 +91,64 @@ func TestPackNamespaces(t *testing.T) {
 	} {
 		if got := strings.Join(p.Namespaces(procs), ","); got != want {
 			t.Errorf("Namespaces(%d) = %s, want %s", procs, got, want)
+		}
+	}
+}
+
+// A pack mounted from a ConfigMap lies the way the kubelet's atomic writer
+// writes it: files under a hidden timestamped directory, ..data pointing at
+// it, and one symlink per top-level entry. With items that map keys to nested
+// paths, scenarios/ holds only the files; mounted on scenarios/ itself, the
+// hidden entries land there, and the loader must skip them.
+func TestLoadPackFromConfigMapLayouts(t *testing.T) {
+	write := func(p, s string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	atomic := func(root string, files map[string]string) {
+		t.Helper()
+		ts := "..2026_10_27_09_00_00.000000001"
+		for p, s := range files {
+			write(filepath.Join(root, ts, p), s)
+		}
+		if err := os.Symlink(ts, filepath.Join(root, "..data")); err != nil {
+			t.Fatal(err)
+		}
+		entries, err := os.ReadDir(filepath.Join(root, ts))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			if err := os.Symlink(filepath.Join("..data", e.Name()), filepath.Join(root, e.Name())); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	items := t.TempDir()
+	atomic(filepath.Join(items, "valkey"), map[string]string{
+		"operator.yaml":           validPack,
+		"manifests/cluster.yaml":  manifest,
+		"scenarios/external.yaml": minimalScenario,
+	})
+	direct := t.TempDir()
+	write(filepath.Join(direct, "valkey/operator.yaml"), validPack)
+	write(filepath.Join(direct, "valkey/manifests/cluster.yaml"), manifest)
+	atomic(filepath.Join(direct, "valkey/scenarios"), map[string]string{"external.yaml": minimalScenario})
+
+	for name, dir := range map[string]string{"items": items, "mounted on scenarios": direct} {
+		p, err := LoadPack(os.DirFS(dir), "valkey", "", knownSteps)
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if len(p.Scenarios) != 1 || p.Scenarios[0].Name != "external" {
+			t.Errorf("%s: scenarios = %v, want [external]", name, p.Scenarios)
 		}
 	}
 }

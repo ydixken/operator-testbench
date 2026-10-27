@@ -83,6 +83,12 @@ When the release exists, another run is active on that cluster, or a crashed run
 The `# renovate:` comments above the two versions let one Renovate custom manager serve every pack.
 Bumps of the operator and the chart are labelled `dependencies/major` and never automerged, because a bump has to be read against the scenarios.
 
+## A pack outside this repository
+
+`TESTBENCH_PACK_DIR` names a directory laid out like `operators/`, and its packs replace the embedded ones for the run.
+`task pack:validate PACK_DIR=<dir>` checks such a directory without a cluster, with the same loader and Go steps a run uses.
+In a cluster the chart takes the pack from a ConfigMap; see [your own pack](deploying.md#your-own-pack).
+
 ## Adding a pack
 
 1. Create `operators/<name>/operator.yaml` and run `task test`; the parser names what is missing.

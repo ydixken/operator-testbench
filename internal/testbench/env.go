@@ -19,6 +19,7 @@ package testbench
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -38,6 +39,9 @@ const (
 	// EnvOperatorNamespace overrides the pack's operator.namespace.
 	EnvOperatorNamespace = "TESTBENCH_OPERATOR_NAMESPACE"
 	EnvNamespaces        = "TESTBENCH_NAMESPACES"
+	// EnvPackDir names a directory laid out like operators/ whose packs
+	// replace the embedded ones for the run.
+	EnvPackDir = "TESTBENCH_PACK_DIR"
 
 	// InstallHelm installs the pack's chart; InstallSkip expects the operator
 	// to be there already and only waits for it.
@@ -65,6 +69,9 @@ type Env struct {
 	OperatorNamespace string
 	// Namespaces is NamespacesManaged or NamespacesProvided.
 	Namespaces string
+	// PackDir, when set, is the absolute directory the packs are read from
+	// instead of the embedded ones.
+	PackDir string
 	// Keep leaves the scenario namespaces in place at the end.
 	Keep bool
 	// Force takes over a Helm release a crashed run left behind.
@@ -83,6 +90,7 @@ func ParseEnv(getenv func(string) string) (Env, error) {
 
 		OperatorNamespace: getenv(EnvOperatorNamespace),
 		Namespaces:        getenv(EnvNamespaces),
+		PackDir:           getenv(EnvPackDir),
 	}
 	var errs []error
 	if e.Operator == "" {
@@ -114,6 +122,9 @@ func ParseEnv(getenv func(string) string) (Env, error) {
 	default:
 		errs = append(errs, fmt.Errorf("%s=%s must be %s or %s",
 			EnvNamespaces, strconv.Quote(e.Namespaces), NamespacesManaged, NamespacesProvided))
+	}
+	if e.PackDir != "" && !filepath.IsAbs(e.PackDir) {
+		errs = append(errs, fmt.Errorf("%s=%s must be an absolute path", EnvPackDir, strconv.Quote(e.PackDir)))
 	}
 	var err error
 	if e.Keep, err = parseBool(EnvKeep, getenv(EnvKeep)); err != nil {

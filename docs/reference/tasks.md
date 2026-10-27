@@ -9,6 +9,7 @@ The cluster-touching targets read the current kubectl context, show it, and pass
 | `task test` | no | `go test ./... -skip '^TestE2E$' -race` with coverage. Parses every embedded pack. |
 | `task kind:up [OPERATOR=valkey]` | no | Creates the kind cluster `testbench` from `hack/kind/<OPERATOR>.yaml` when it does not exist, selects the context `kind-testbench`, and preloads the pack's images. |
 | `task kind:down` | no | Deletes the kind cluster `testbench`. |
+| `task pack:validate PACK_DIR=<dir>` | no | Loads every pack in `<dir>` (laid out like `operators/`) with the run's loader and Go steps, without a cluster. |
 | `task chart:generate` | no | Writes `charts/operator-testbench/files/scenarios.yaml` from the embedded packs. `task test` fails while it is stale. |
 | `task chart:lint` | no | `helm lint --strict` on the chart, and its rendered output through `yamllint`. Part of `task lint`. |
 | `task image:build [TAG=dev]` | no | Builds the testbench image for the local platform as `operator-testbench:<TAG>`. Needs Docker. |

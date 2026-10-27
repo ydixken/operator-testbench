@@ -55,6 +55,7 @@ Every knob is an environment variable; the Task targets expose them as variables
 | `TESTBENCH_OPERATOR_VERSION` | `VERSION` | the pack's | Overrides the operator version in the CRD URLs and Helm values. |
 | `TESTBENCH_OPERATOR_INSTALL` | `INSTALL` | `helm` | `skip` uses an operator already installed in the operator namespace, and only waits for it. |
 | `TESTBENCH_OPERATOR_NAMESPACE` | `OPERATOR_NAMESPACE` | the pack's | The operator namespace. With `INSTALL=skip`, where the installed operator runs. |
+| `TESTBENCH_PACK_DIR` | none | unset | An absolute directory laid out like `operators/`; its packs replace the embedded ones. |
 | `TESTBENCH_NAMESPACES` | `NAMESPACES` | `managed` | `provided`: the scenario namespaces exist before the run, and the engine never creates or deletes them. |
 | `TESTBENCH_KEEP` | `KEEP` | `false` | `true` leaves the scenario namespaces in place at the end. |
 | `TESTBENCH_FORCE` | `FORCE` | `false` | `true` takes over a Helm release a crashed run left behind, and replaces CRDs another install owns. |

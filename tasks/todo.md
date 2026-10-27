@@ -1,5 +1,19 @@
 # Plans
 
+## External pack
+
+Design: `docs/superpowers/specs/2026-10-27-external-pack-design.md` (local only).
+One pull request on `feat/external-pack`.
+
+- [x] Engine: `TESTBENCH_PACK_DIR` (absolute path) in `ParseEnv`; `loadSuite` reads `os.DirFS(dir)` when set; `loadScenarios` skips entries starting with `.`.
+- [x] Unit tests: the knob, hidden entries, the kubelet ConfigMap layout.
+- [x] `TestPackDir` and `task pack:validate PACK_DIR=<dir>`.
+- [x] Chart: `externalPack.configMap` and `externalPack.files`; ConfigMap volume with items at `/packs/<pack>`, `TESTBENCH_PACK_DIR=/packs`; namespaces from the `scenarios/` entries; template failures for missing `operator.yaml`, no scenario, invalid path.
+- [x] `e2e-kind-cluster`: a run from a ConfigMap with `cluster-ready.yaml` as `external-smoke`, before the negative run.
+- [x] Docs: `packs.md`, `deploying.md` (incl. the two-releases sentence), `reference/environment.md` (STE), `reference/tasks.md`, `troubleshooting.md`, CONTRIBUTING.
+- [x] `task lint` and `task test` green locally (2026-10-27); `pack:validate` passes a good pack and fails a broken one.
+- [ ] CI green; maintainer cluster test of `v0.3.0-rc.1`, then `v0.3.0`.
+
 ## Cluster mode
 
 Design: `docs/superpowers/specs/2026-10-23-cluster-mode-design.md` (local only).

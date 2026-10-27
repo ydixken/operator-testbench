@@ -37,13 +37,13 @@ func TestParseEnvDefaults(t *testing.T) {
 	e, err = ParseEnv(getenvFrom(map[string]string{
 		EnvContext: "kind-testbench", EnvOperator: "valkey", EnvVersion: "v0.7.0",
 		EnvInstall: InstallSkip, EnvKeep: "true", EnvForce: "true",
-		EnvOperatorNamespace: "valkey-operator-system", EnvNamespaces: NamespacesProvided,
+		EnvOperatorNamespace: "valkey-operator-system", EnvNamespaces: NamespacesProvided, EnvPackDir: "/packs",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = Env{Context: "kind-testbench", Operator: "valkey", Version: "v0.7.0", Install: InstallSkip, Keep: true, Force: true,
-		OperatorNamespace: "valkey-operator-system", Namespaces: NamespacesProvided}
+		OperatorNamespace: "valkey-operator-system", Namespaces: NamespacesProvided, PackDir: "/packs"}
 	if e != want {
 		t.Errorf("ParseEnv = %+v, want %+v", e, want)
 	}
@@ -64,6 +64,8 @@ func TestParseEnvQuotesBadValues(t *testing.T) {
 			[]string{EnvOperatorNamespace + `="Ops_NS"`}},
 		{"bad namespaces", map[string]string{EnvOperator: "valkey", EnvNamespaces: "shared"},
 			[]string{`"shared"`, "managed or provided"}},
+		{"relative pack dir", map[string]string{EnvOperator: "valkey", EnvPackDir: "packs"},
+			[]string{EnvPackDir + `="packs"`, "absolute"}},
 		{"force is not a bool", map[string]string{EnvOperator: "valkey", EnvForce: "yes"}, []string{EnvForce + `="yes"`}},
 		{"everything at once", map[string]string{EnvInstall: "x", EnvKeep: "y"}, []string{EnvOperator, EnvInstall, EnvKeep}},
 	} {

@@ -69,6 +69,10 @@ spec:
             # kubectl writes its discovery cache under HOME.
             - name: HOME
               value: /tmp
+            {{- if .Values.externalPack.configMap }}
+            - name: TESTBENCH_PACK_DIR
+              value: /packs
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -83,11 +87,30 @@ spec:
               mountPath: /reports
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.externalPack.configMap }}
+            - name: pack
+              mountPath: /packs/{{ .Values.pack }}
+              readOnly: true
+            {{- end }}
       volumes:
         - name: reports
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        {{- with .Values.externalPack }}
+        {{- if .configMap }}
+        # Items map each key to its path, because a ConfigMap key cannot hold
+        # a "/" and the loader expects manifests/ and scenarios/.
+        - name: pack
+          configMap:
+            name: {{ .configMap }}
+            items:
+              {{- range .files }}
+              - key: {{ replace "/" "__" . }}
+                path: {{ . }}
+              {{- end }}
+        {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

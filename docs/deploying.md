@@ -41,6 +41,7 @@ Helm waits for the hook, and its `--timeout` (default 5 minutes) MUST be longer 
 | `namespaceLabels` | `{}` | Added to every scenario namespace, for example Pod Security or a mesh opt-out. |
 | `podAnnotations`, `podLabels`, `resources`, `nodeSelector`, `tolerations` | empty | The Job's pod. |
 | `packs.<pack>.rules` | shipped per pack | The scenario role. |
+| `externalPack.configMap`, `externalPack.files` | empty | Run a pack from a ConfigMap instead of the embedded one; see below. |
 
 ## Permissions
 
@@ -115,9 +116,63 @@ spec:
 
 Argo CD runs the Job as a PostSync hook on every sync.
 
+## Your own pack
+
+The image embeds its packs, and they stay the default.
+A pack kept in your own repository replaces the embedded pack of the same name for one release, as a whole: it does not merge scenarios.
+
+Put the pack's files into a ConfigMap in the release namespace, in the same sync as the chart.
+A ConfigMap key cannot hold a `/`, so the key is the file's path inside the pack with `/` replaced by `__`:
+
+```yaml
+# kustomization.yaml
+configMapGenerator:
+  - name: my-pack
+    namespace: operator-testbench
+    options: {disableNameSuffixHash: true}
+    files:
+      - operator.yaml=valkey/operator.yaml
+      - manifests__cluster.yaml=valkey/manifests/cluster.yaml
+      - scenarios__smoke.yaml=valkey/scenarios/smoke.yaml
+```
+
+Then list the same paths in the chart's values:
+
+```yaml
+pack: valkey
+externalPack:
+  configMap: my-pack
+  files:
+    - operator.yaml
+    - manifests/cluster.yaml
+    - scenarios/smoke.yaml
+```
+
+The chart mounts each key at its path under `/packs/<pack>` and sets `TESTBENCH_PACK_DIR=/packs`.
+The scenario namespaces come from the `scenarios/` entries, so the list cannot drift from the namespaces.
+`helm template` fails when `operator.yaml` or every `scenarios/` entry is missing, or when a path is not lower case or is more than one directory deep.
+Scenarios may use every step kind and the Go steps the image registers.
+The pack's `operator.version` is the version the run expects, so a patch release of the operator needs only a change to your pack.
+
+Check a pack before it reaches the cluster: `task pack:validate PACK_DIR=<dir>` in a checkout of this repository, or with the image alone:
+
+```sh
+docker run --rm -v "$PWD/packs:/packs:ro" -e TESTBENCH_PACK_DIR=/packs \
+  --entrypoint /testbench/e2e.test ghcr.io/ydixken/operator-testbench:<version> -test.run '^TestPackDir$' -test.v
+```
+
+`<dir>` holds `<pack>/operator.yaml`, like `operators/` in this repository.
+
+Whoever can change the ConfigMap decides what the Job does in the scenario namespaces: it runs `exec` and applies objects with the scenario role there.
+Give the ConfigMap the same review as the chart values.
+
+A ConfigMap or a listed key that is missing keeps the Job's pod in `ContainerCreating` until `activeDeadlineSeconds`.
+Keep both in one sync, and validate the pack first.
+
 ## How the chart is tested
 
 The workflow `e2e-kind-cluster.yml` does on every pull request what a deploying repository does: it installs valkey-operator from its upstream chart, then this chart from the working tree with an image built in the job, and runs the smoke scenarios.
+A run from an external pack in a ConfigMap must show its only scenario, `external-smoke`, in the log.
 A second run with `operator.version` set to a version the cluster does not run MUST fail.
 A pull request merges only when the job is green.
 
@@ -127,5 +182,6 @@ A pull request merges only when the job is green.
   Set `force: true` for one run, or delete them by hand.
 - A mesh sidecar keeps the Job's pod running after the test container exits.
   Opt out with `podAnnotations` (for example `sidecar.istio.io/inject: "false"`) or `namespaceLabels` for the scenario namespaces.
-- Two releases of the chart cannot share a cluster: Helm refuses to create namespaces another release owns.
+- Two releases with the same `pack` cannot share a cluster: Helm refuses to create namespaces another release owns.
+  Releases with different pack names can, for example the embedded `valkey` and your own pack under another name.
 - `helm uninstall` removes the namespaces and the RBAC, but not the last hook Job; delete that by hand.

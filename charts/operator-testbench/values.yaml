@@ -13,6 +13,16 @@ operator:
   # the pack pins. Empty means the pack's version.
   version: ""
 
+# A pack kept outside the image, from a ConfigMap, replaces the embedded pack
+# of the same name for this release. files lists every file of the pack by its
+# path inside the pack; the ConfigMap key is that path with "/" replaced by
+# "__" (scenarios/smoke.yaml is the key scenarios__smoke.yaml). The scenario
+# namespaces come from the scenarios/ entries. packs.<pack>.rules must cover
+# what the pack's scenarios do.
+externalPack:
+  configMap: ""
+  files: []
+
 # Ginkgo processes. Every process gets its own scenario namespaces. One by
 # default, to go easy on a shared cluster.
 procs: 1
