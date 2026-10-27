@@ -1,6 +1,6 @@
 # Plans
 
-## External pack
+## External pack (done)
 
 Design: `docs/superpowers/specs/2026-10-27-external-pack-design.md` (local only).
 One pull request on `feat/external-pack`.
@@ -12,7 +12,7 @@ One pull request on `feat/external-pack`.
 - [x] `e2e-kind-cluster`: the `external-smoke` run delivers its pack through `extraVolumes`.
 - [x] Docs: general values; a ConfigMap with `items` as an example only; re-run through `podAnnotations`; missing keys; RBAC for another pack name; new Go steps need a release; validation without Docker.
 - [x] `task lint` and `task test` green locally (2026-10-27); `pack:validate` passes a good pack and fails a broken one.
-- [ ] CI green; maintainer cluster test of `v0.3.0-rc.1`, then `v0.3.0`.
+- [x] CI green on #16, including `external-smoke` through `extraVolumes` (19 of 19 specs); maintainer cluster test of `v0.3.0-rc.1` passed; `v0.3.0` released (2026-10-27).
 
 ## Cluster mode
 
